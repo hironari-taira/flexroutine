@@ -27,6 +27,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "verify:run-plan": "node scripts/verify-run-plan.mjs",
+    "verify:android-env": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-android-env.ps1",
     "capture:blog": "node scripts/capture-blog-screenshots.mjs"
   },
   "private": true,

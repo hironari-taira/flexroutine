@@ -66,8 +66,11 @@ npm.cmd run web
 npm.cmd run typecheck
 npm.cmd run lint
 npm.cmd run verify:run-plan
+npm.cmd run verify:android-env
 npm.cmd run format
 ```
+
+Android実機でのGoal 1確認は [docs/qa/goal-1-android-checklist.md](docs/qa/goal-1-android-checklist.md) を使います。
 
 ## 既知の制約
 
