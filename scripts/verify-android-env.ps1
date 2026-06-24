@@ -23,16 +23,25 @@ Write-Output "emulator: $(if ($emulator) { $emulator } else { 'not found' })"
 
 if ($adb) {
   & $adb version
-  & $adb devices
+  $deviceOutput = & $adb devices
+  $deviceOutput
+  $connectedDevices = @($deviceOutput | Select-String -Pattern "`tdevice$")
+} else {
+  $connectedDevices = @()
 }
 
 if ($emulator) {
   & $emulator -list-avds
 }
 
-if (-not $adb -or -not $emulator) {
+if (-not $adb) {
   Write-Output 'Android verification environment is incomplete on this machine.'
   exit 2
+}
+
+if ($connectedDevices.Count -eq 0 -and -not $emulator) {
+  Write-Output 'adb is available, but no connected Android device or emulator command was found.'
+  exit 3
 }
 
 Write-Output 'Android verification environment is available.'
