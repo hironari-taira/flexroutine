@@ -6,10 +6,11 @@ import { RoutineCard } from '@/components/RoutineCard';
 import { SuggestionCard } from '@/components/SuggestionCard';
 import { getDatabase, initializeDatabase } from '@/db/database';
 import { listRoutineCards, type RoutineCardView } from '@/db/repositories/routineRepository';
+import { buildHomeSuggestion, type HomeSuggestion } from '@/features/suggestions/homeSuggestion';
 
 type HomeState =
   | { status: 'loading' }
-  | { status: 'ready'; routines: RoutineCardView[] }
+  | { status: 'ready'; routines: RoutineCardView[]; suggestion: HomeSuggestion }
   | { status: 'error'; message: string };
 
 export default function HomeScreen() {
@@ -21,8 +22,8 @@ export default function HomeScreen() {
       setState({ status: 'loading' });
       const db = await getDatabase();
       await initializeDatabase(db);
-      const routines = await listRoutineCards(db);
-      setState({ status: 'ready', routines });
+      const [routines, suggestion] = await Promise.all([listRoutineCards(db), buildHomeSuggestion(db)]);
+      setState({ status: 'ready', routines, suggestion });
     } catch (error) {
       setState({
         status: 'error',
@@ -93,10 +94,9 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      <SuggestionCard
-        title="最初はサンプルで始められます"
-        body="朝の支度、夜の支度、仕事開始前の3つを初回起動時に保存します。編集と実行ログは次のPhaseで広げます。"
-      />
+      {state.status === 'ready' ? (
+        <SuggestionCard title={state.suggestion.title} body={state.suggestion.body} />
+      ) : null}
     </ScrollView>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "createdAt": "2026-06-25",
+  "goal": "Goal 1: FlexRoutine 時短実行できる縦割りMVP",
+  "screenshots": [
+    {
+      "id": "home-routines",
+      "route": "/",
+      "description": "Homeでサンプル3件とDB由来提案が見える状態",
+      "file": "docs/blog-assets/home-routines.png",
+      "status": "captured_mock"
+    },
+    {
+      "id": "emergency-plan",
+      "route": "/routine/morning/run?mode=emergency",
+      "description": "緊急！時短で持ち時間を入れ、実行/短縮/スキップが分かる状態",
+      "file": "docs/blog-assets/emergency-plan.png",
+      "status": "captured_mock"
+    },
+    {
+      "id": "target-too-short",
+      "route": "/routine/morning/run?mode=emergency",
+      "description": "最低限未満の持ち時間で警告が出る状態",
+      "file": "docs/blog-assets/target-too-short.png",
+      "status": "captured_mock"
+    },
+    {
+      "id": "timer-running",
+      "route": "/routine/morning/timer?mode=emergency&targetSec=900",
+      "description": "TimerScreenで現在タスク、残り時間、次タスクが見える状態",
+      "file": "docs/blog-assets/timer-running.png",
+      "status": "captured_mock"
+    },
+    {
+      "id": "completion",
+      "route": "/routine/morning/complete",
+      "description": "完了画面で保存された実績サマリーが見える状態",
+      "status": "planned_android"
+    }
+  ],
+  "notes": [
+    "実機スクショはAndroid優先。Webはexpo-sqlite初期化が完了せずloadingに留まったため、ブログ用には実装UIに合わせたmock captureを保存した。",
+    "ブログでは、単なる完成画面よりも「最低限未満の警告」と「スキップ/短縮のプラン表示」がコンセプト説明に向いている。"
+  ]
+}

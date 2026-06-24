@@ -15,8 +15,13 @@ export function getDatabase() {
 
 export function initializeDatabase(db: SQLite.SQLiteDatabase) {
   initializationPromise ??= (async () => {
-    await runMigrations(db);
-    await seedSampleRoutinesIfNeeded(db);
+    try {
+      await runMigrations(db);
+      await seedSampleRoutinesIfNeeded(db);
+    } catch (error) {
+      initializationPromise = null;
+      throw error;
+    }
   })();
   return initializationPromise;
 }

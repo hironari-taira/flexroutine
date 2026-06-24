@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 
 import type { RoutineCardView } from '@/db/repositories/routineRepository';
 import { formatDuration } from '@/utils/time';
@@ -16,6 +16,16 @@ export function RoutineCard({
   onPress,
   onStartPress,
 }: RoutineCardProps) {
+  const handleStartPress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onStartPress();
+  };
+
+  const handleEmergencyPress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onEmergencyPress();
+  };
+
   return (
     <Pressable accessibilityRole="button" style={styles.card} onPress={onPress}>
       <View style={styles.header}>
@@ -38,13 +48,13 @@ export function RoutineCard({
       </View>
 
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" style={styles.startButton} onPress={onStartPress}>
+        <Pressable accessibilityRole="button" style={styles.startButton} onPress={handleStartPress}>
           <Text style={styles.startButtonText}>スタート</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           style={styles.emergencyButton}
-          onPress={onEmergencyPress}
+          onPress={handleEmergencyPress}
         >
           <Text style={styles.emergencyButtonText}>緊急！時短</Text>
         </Pressable>

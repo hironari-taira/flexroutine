@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { ExecutionLog } from '@/types/models';
+import type { ExecutionLog, TaskLog } from '@/types/models';
 
 export async function createExecutionLog(db: SQLiteDatabase, log: ExecutionLog) {
   await db.runAsync(
@@ -34,4 +34,72 @@ export async function createExecutionLog(db: SQLiteDatabase, log: ExecutionLog) 
     log.usedEmergency ? 1 : 0,
     log.optionalNote ?? null,
   );
+}
+
+export async function createTaskLogs(db: SQLiteDatabase, logs: TaskLog[]) {
+  for (const log of logs) {
+    await db.runAsync(
+      `
+        INSERT INTO task_logs (
+          id,
+          execution_log_id,
+          task_id,
+          task_title_snapshot,
+          planned_duration_sec,
+          actual_duration_sec,
+          status,
+          started_at,
+          ended_at,
+          extension_sec,
+          order_index
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      log.id,
+      log.executionLogId,
+      log.taskId,
+      log.taskTitleSnapshot,
+      log.plannedDurationSec,
+      log.actualDurationSec ?? null,
+      log.status,
+      log.startedAt,
+      log.endedAt ?? null,
+      log.extensionSec,
+      log.orderIndex,
+    );
+  }
+}
+
+export async function saveExecutionWithTaskLogs(
+  db: SQLiteDatabase,
+  executionLog: ExecutionLog,
+  taskLogs: TaskLog[],
+) {
+  await db.withTransactionAsync(async () => {
+    await createExecutionLog(db, executionLog);
+    await createTaskLogs(db, taskLogs);
+  });
+}
+
+export async function getExecutionLogCount(db: SQLiteDatabase) {
+  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM execution_logs');
+  return row?.count ?? 0;
+}
+
+export async function getEmergencyLogCount(db: SQLiteDatabase) {
+  const row = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM execution_logs WHERE used_emergency = 1 AND status = 'COMPLETED'",
+  );
+  return row?.count ?? 0;
+}
+
+export async function getMostSkippedTask(db: SQLiteDatabase) {
+  return db.getFirstAsync<{ taskTitle: string; count: number }>(`
+    SELECT task_title_snapshot AS taskTitle, COUNT(*) AS count
+    FROM task_logs
+    WHERE status = 'SKIPPED'
+    GROUP BY task_title_snapshot
+    ORDER BY count DESC
+    LIMIT 1
+  `);
 }

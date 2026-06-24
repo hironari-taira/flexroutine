@@ -15,6 +15,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ title: 'FlexRoutine' }} />
         <Stack.Screen name="routine/[id]" options={{ title: 'ルーティン' }} />
         <Stack.Screen name="routine/[id]/run" options={{ title: '実行プレビュー' }} />
+        <Stack.Screen name="routine/[id]/timer" options={{ headerShown: false }} />
+        <Stack.Screen name="routine/[id]/complete" options={{ title: '完了' }} />
       </Stack>
     </>
   );
