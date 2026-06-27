@@ -34,11 +34,27 @@
       "id": "completion",
       "route": "/routine/morning/complete",
       "description": "完了画面で保存された実績サマリーが見える状態",
-      "status": "planned_android"
+      "file": "docs/blog-assets/avd-completion.png",
+      "status": "captured_avd"
+    },
+    {
+      "id": "avd-timer-running",
+      "route": "/routine/morning/timer?mode=emergency&targetSec=900",
+      "description": "AVD上のTimerScreen。現在タスク、残り時間、次タスク、操作ボタンが見える状態",
+      "file": "docs/blog-assets/avd-timer-running.png",
+      "status": "captured_avd"
+    },
+    {
+      "id": "avd-home-suggestion",
+      "route": "/",
+      "description": "AVDで完了後、Home提案カードがDBログ由来のスキップ提案に変わった状態",
+      "file": "docs/blog-assets/avd-home-suggestion.png",
+      "status": "captured_avd"
     }
   ],
   "notes": [
     "実機スクショはAndroid優先。Webはexpo-sqlite初期化が完了せずloadingに留まったため、ブログ用には実装UIに合わせたmock captureを保存した。",
+    "2026-06-27にAVD FlexRoutine_Pixel8_API37でTimer/Completion/Home suggestionの実機相当スクショを取得した。",
     "ブログでは、単なる完成画面よりも「最低限未満の警告」と「スキップ/短縮のプラン表示」がコンセプト説明に向いている。"
   ]
 }
