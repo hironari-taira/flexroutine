@@ -86,6 +86,7 @@ export default function RunPreviewScreen() {
     mode: runModeToParam(runMode),
     targetSec: String(hasTargetWarning ? plan.minimumTotalSec : plan.targetTotalSec ?? plan.plannedTotalSec),
   };
+  const startTimer = () => router.push({ pathname: '/routine/[id]/timer', params: timerParams });
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -158,6 +159,16 @@ export default function RunPreviewScreen() {
         ) : null}
       </View>
 
+      <Pressable
+        accessibilityRole="button"
+        style={styles.primaryButton}
+        onPress={startTimer}
+      >
+        <Text style={styles.primaryButtonText}>
+          {hasTargetWarning ? '最低限で始める' : 'このプランで始める'}
+        </Text>
+      </Pressable>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>実行内容</Text>
         {plan.items.map((item) => (
@@ -173,16 +184,6 @@ export default function RunPreviewScreen() {
           </View>
         ))}
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        style={styles.primaryButton}
-        onPress={() => router.push({ pathname: '/routine/[id]/timer', params: timerParams })}
-      >
-        <Text style={styles.primaryButtonText}>
-          {hasTargetWarning ? '最低限で始める' : 'このプランで始める'}
-        </Text>
-      </Pressable>
     </ScrollView>
   );
 }

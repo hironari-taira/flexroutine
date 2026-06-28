@@ -19,11 +19,11 @@ import { createRunPlan, type RunPlan, type RunPlanItem } from '@/domain/runPlan'
 import { normalizeRunMode } from '@/domain/runMode';
 import { notifyCompletion, notifyTaskAdvance } from '@/services/feedbackService';
 import { speakCompletion, speakTaskStart, speakThirtySecondsLeft } from '@/services/speechService';
-import type { TaskLog } from '@/types/models';
+import type { AdvanceMode, TaskLog } from '@/types/models';
 import { createId } from '@/utils/ids';
 import { formatClock, formatDuration } from '@/utils/time';
 
-type TimerPhase = 'RUNNING' | 'PAUSED' | 'SAVING';
+type TimerPhase = 'RUNNING' | 'PAUSED' | 'SAVING' | 'TIME_UP_WAITING';
 
 interface TaskResult {
   actualDurationSec: number;
@@ -47,11 +47,15 @@ export default function TimerScreen() {
   const [plan, setPlan] = useState<RunPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [phase, setPhase] = useState<TimerPhase>('RUNNING');
+  const [advanceMode, setAdvanceMode] = useState<AdvanceMode>('AUTO');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
   const [extensionSec, setExtensionSec] = useState(0);
 
   const taskStartedAtRef = useRef(new Date().toISOString());
+  const taskStartedAtMsRef = useRef(0);
+  const taskEndsAtMsRef = useRef(0);
+  const taskPauseTotalSecRef = useRef(0);
   const sessionStartedAtRef = useRef(new Date().toISOString());
   const pauseStartedMsRef = useRef<number | null>(null);
   const pauseTotalSecRef = useRef(0);
@@ -59,6 +63,30 @@ export default function TimerScreen() {
   const lastTapMsRef = useRef(0);
   const isSavingRef = useRef(false);
   const announcedThirtySecKeyRef = useRef<string | null>(null);
+
+  const runnableItems = useMemo(
+    () => plan?.items.filter((item) => item.status !== 'SKIPPED') ?? [],
+    [plan],
+  );
+  const currentItem = runnableItems[currentIndex] ?? null;
+  const nextItem = runnableItems[currentIndex + 1] ?? null;
+  const totalRemainingSec = runnableItems
+    .slice(currentIndex)
+    .reduce((sum, item, index) => sum + (index === 0 ? remainingSec : item.plannedDurationSec), 0);
+
+  const startTask = useCallback((item: RunPlanItem) => {
+    const nowMs = Date.now();
+    taskStartedAtRef.current = new Date(nowMs).toISOString();
+    taskStartedAtMsRef.current = nowMs;
+    taskEndsAtMsRef.current = nowMs + item.plannedDurationSec * 1000;
+    taskPauseTotalSecRef.current = 0;
+    pauseStartedMsRef.current = null;
+    announcedThirtySecKeyRef.current = null;
+    setRemainingSec(item.plannedDurationSec);
+    setExtensionSec(0);
+    setPhase('RUNNING');
+    speakTaskStart(item.title, item.plannedDurationSec);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,27 +108,28 @@ export default function TimerScreen() {
         runMode,
         Number.isFinite(targetTotalSec) && targetTotalSec > 0 ? targetTotalSec : undefined,
       );
-      const runnableItems = nextPlan.items.filter((item) => item.status !== 'SKIPPED');
+      const runnable = nextPlan.items.filter((item) => item.status !== 'SKIPPED');
+      const startedAt = new Date().toISOString();
 
-      sessionStartedAtRef.current = new Date().toISOString();
+      sessionStartedAtRef.current = startedAt;
       taskResultsRef.current = nextPlan.items
         .filter((item) => item.status === 'SKIPPED')
         .map((item) => ({
           actualDurationSec: 0,
-          endedAt: sessionStartedAtRef.current,
+          endedAt: startedAt,
           extensionSec: 0,
           item,
-          startedAt: sessionStartedAtRef.current,
+          startedAt,
           status: 'SKIPPED',
         }));
 
       setRoutine(nextRoutine);
       setPlan(nextPlan);
-      setRemainingSec(runnableItems[0]?.plannedDurationSec ?? 0);
-      taskStartedAtRef.current = new Date().toISOString();
+      setCurrentIndex(0);
+      setAdvanceMode('AUTO');
       setIsLoading(false);
-      if (runnableItems[0]) {
-        speakTaskStart(runnableItems[0].title, runnableItems[0].plannedDurationSec);
+      if (runnable[0]) {
+        startTask(runnable[0]);
       }
     }
 
@@ -108,14 +137,7 @@ export default function TimerScreen() {
     return () => {
       isMounted = false;
     };
-  }, [id, runMode, targetTotalSec]);
-
-  const runnableItems = useMemo(() => plan?.items.filter((item) => item.status !== 'SKIPPED') ?? [], [plan]);
-  const currentItem = runnableItems[currentIndex] ?? null;
-  const nextItem = runnableItems[currentIndex + 1] ?? null;
-  const totalRemainingSec = runnableItems
-    .slice(currentIndex)
-    .reduce((sum, item, index) => sum + (index === 0 ? remainingSec : item.plannedDurationSec), 0);
+  }, [id, runMode, startTask, targetTotalSec]);
 
   const persistAndNavigate = useCallback(
     async (finalResults: TaskResult[]) => {
@@ -165,6 +187,7 @@ export default function TimerScreen() {
             endedAt: result.endedAt,
             extensionSec: result.extensionSec,
             orderIndex: result.item.orderIndex,
+            note: null,
           })),
       );
 
@@ -180,6 +203,7 @@ export default function TimerScreen() {
           plannedSec: String(plan.plannedTotalSec),
           actualSec: String(actualTotalSec),
           mode: plan.mode === 'EMERGENCY' ? 'emergency' : 'normal',
+          routineTitle: routine.title,
         },
       });
     },
@@ -188,13 +212,21 @@ export default function TimerScreen() {
 
   const finishCurrentTask = useCallback(
     async (status: TaskLog['status']) => {
-      if (!currentItem || phase === 'SAVING') {
+      if (!currentItem || phase === 'PAUSED' || phase === 'SAVING') {
         return;
       }
 
-      const endedAt = new Date().toISOString();
-      const actualDurationSec =
-        status === 'SKIPPED' ? 0 : Math.max(0, currentItem.plannedDurationSec + extensionSec - remainingSec);
+      const nowMs = Date.now();
+      const endedAt = new Date(nowMs).toISOString();
+      const elapsedSec = Math.max(
+        0,
+        Math.round((nowMs - taskStartedAtMsRef.current) / 1000) - taskPauseTotalSecRef.current,
+      );
+      const cappedActualSec = Math.min(
+        elapsedSec,
+        currentItem.plannedDurationSec + extensionSec,
+      );
+      const actualDurationSec = status === 'SKIPPED' ? 0 : cappedActualSec;
       const nextResults = [
         ...taskResultsRef.current,
         {
@@ -218,22 +250,9 @@ export default function TimerScreen() {
       const nextIndex = currentIndex + 1;
       const nextTask = runnableItems[nextIndex];
       setCurrentIndex(nextIndex);
-      setRemainingSec(nextTask.plannedDurationSec);
-      setExtensionSec(0);
-      setPhase('RUNNING');
-      taskStartedAtRef.current = new Date().toISOString();
-      announcedThirtySecKeyRef.current = null;
-      speakTaskStart(nextTask.title, nextTask.plannedDurationSec);
+      startTask(nextTask);
     },
-    [
-      currentIndex,
-      currentItem,
-      extensionSec,
-      phase,
-      persistAndNavigate,
-      remainingSec,
-      runnableItems,
-    ],
+    [currentIndex, currentItem, extensionSec, persistAndNavigate, phase, runnableItems, startTask],
   );
 
   useEffect(() => {
@@ -242,18 +261,21 @@ export default function TimerScreen() {
     }
 
     const timer = setInterval(() => {
-      setRemainingSec((previous) => {
-        if (previous <= 1) {
-          clearInterval(timer);
-          void finishCurrentTask('AUTO_COMPLETED');
-          return 0;
-        }
-        return previous - 1;
-      });
+      const nextRemainingSec = Math.max(0, Math.ceil((taskEndsAtMsRef.current - Date.now()) / 1000));
+      setRemainingSec(nextRemainingSec);
+      if (nextRemainingSec > 0) {
+        return;
+      }
+
+      if (advanceMode === 'AUTO') {
+        void finishCurrentTask('AUTO_COMPLETED');
+      } else {
+        setPhase('TIME_UP_WAITING');
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentItem, finishCurrentTask, phase]);
+  }, [advanceMode, currentItem, finishCurrentTask, phase]);
 
   useEffect(() => {
     if (!currentItem || remainingSec !== 30) {
@@ -268,6 +290,10 @@ export default function TimerScreen() {
   }, [currentIndex, currentItem, remainingSec]);
 
   const handleScreenPress = () => {
+    if (phase === 'PAUSED' || phase === 'SAVING') {
+      return;
+    }
+
     const now = Date.now();
     if (now - lastTapMsRef.current < 320) {
       lastTapMsRef.current = 0;
@@ -277,11 +303,24 @@ export default function TimerScreen() {
     lastTapMsRef.current = now;
   };
 
+  const toggleAdvanceMode = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    setAdvanceMode((current) => (current === 'AUTO' ? 'MANUAL' : 'AUTO'));
+  };
+
   const togglePause = (event: GestureResponderEvent) => {
     event.stopPropagation();
+    if (phase === 'SAVING' || phase === 'TIME_UP_WAITING') {
+      return;
+    }
+
     if (phase === 'PAUSED') {
-      if (pauseStartedMsRef.current) {
-        pauseTotalSecRef.current += Math.floor((Date.now() - pauseStartedMsRef.current) / 1000);
+      const pausedAtMs = pauseStartedMsRef.current;
+      if (pausedAtMs) {
+        const pausedSec = Math.floor((Date.now() - pausedAtMs) / 1000);
+        pauseTotalSecRef.current += pausedSec;
+        taskPauseTotalSecRef.current += pausedSec;
+        taskEndsAtMsRef.current += Date.now() - pausedAtMs;
       }
       pauseStartedMsRef.current = null;
       setPhase('RUNNING');
@@ -294,14 +333,28 @@ export default function TimerScreen() {
 
   const extendCurrentTask = (event: GestureResponderEvent) => {
     event.stopPropagation();
+    if (phase === 'PAUSED' || phase === 'SAVING') {
+      return;
+    }
+
+    taskEndsAtMsRef.current = Math.max(taskEndsAtMsRef.current, Date.now()) + 30_000;
     setRemainingSec((previous) => previous + 30);
     setExtensionSec((previous) => previous + 30);
+    if (phase === 'TIME_UP_WAITING') {
+      setPhase('RUNNING');
+    }
   };
 
   const skipCurrentTask = (event: GestureResponderEvent) => {
     event.stopPropagation();
+    if (phase === 'PAUSED' || phase === 'SAVING') {
+      return;
+    }
     void finishCurrentTask('SKIPPED');
   };
+
+  const isPaused = phase === 'PAUSED';
+  const disablesTaskActions = phase === 'PAUSED' || phase === 'SAVING';
 
   if (isLoading) {
     return (
@@ -325,13 +378,34 @@ export default function TimerScreen() {
         <Text style={styles.progress}>
           {currentIndex + 1} / {runnableItems.length}
         </Text>
-        <Text style={styles.modeLabel}>{runMode === 'EMERGENCY' ? '短縮版' : '通常版'}</Text>
+        <View style={styles.modeGroup}>
+          <Pressable accessibilityRole="button" style={styles.advanceToggle} onPress={toggleAdvanceMode}>
+            <Text style={styles.advanceToggleText}>
+              {advanceMode === 'AUTO' ? '自動で次へ' : 'タップで次へ'}
+            </Text>
+          </Pressable>
+          <Text style={styles.modeLabel}>{runMode === 'EMERGENCY' ? '短縮版' : '通常版'}</Text>
+        </View>
       </View>
 
       <View style={styles.mainPanel}>
         <Text style={styles.taskTitle}>{currentItem.title}</Text>
         <Text style={styles.timer}>{formatClock(remainingSec)}</Text>
         <Text style={styles.remaining}>全体残り {formatDuration(totalRemainingSec)}</Text>
+        {isPaused ? <Text style={styles.pausedLabel}>一時停止中</Text> : null}
+        {phase === 'TIME_UP_WAITING' ? (
+          <View style={styles.timeUpBox}>
+            <Text style={styles.timeUpTitle}>時間です</Text>
+            <Text style={styles.timeUpText}>ダブルタップ、または次へボタンで進みます。</Text>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.nextButton}
+              onPress={() => void finishCurrentTask('AUTO_COMPLETED')}
+            >
+              <Text style={styles.nextButtonText}>次へ進む</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.nextPanel}>
@@ -339,17 +413,33 @@ export default function TimerScreen() {
         <Text style={styles.nextTask}>{nextItem?.title ?? '完了'}</Text>
       </View>
 
-      <Text style={styles.hint}>画面全体をダブルタップで次へ</Text>
+      <Text style={styles.hint}>
+        {isPaused ? '一時停止中はダブルタップ無効' : '画面全体をダブルタップで次へ'}
+      </Text>
 
       <View style={styles.actions}>
         <Pressable accessibilityRole="button" style={styles.controlButton} onPress={togglePause}>
           <Text style={styles.controlButtonText}>{phase === 'PAUSED' ? '再開' : '一時停止'}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" style={styles.controlButton} onPress={extendCurrentTask}>
-          <Text style={styles.controlButtonText}>+30秒</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={disablesTaskActions}
+          style={[styles.controlButton, disablesTaskActions ? styles.disabledButton : null]}
+          onPress={extendCurrentTask}
+        >
+          <Text style={[styles.controlButtonText, disablesTaskActions ? styles.disabledButtonText : null]}>
+            +30秒
+          </Text>
         </Pressable>
-        <Pressable accessibilityRole="button" style={styles.dangerButton} onPress={skipCurrentTask}>
-          <Text style={styles.dangerButtonText}>スキップ</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={disablesTaskActions}
+          style={[styles.dangerButton, disablesTaskActions ? styles.disabledButton : null]}
+          onPress={skipCurrentTask}
+        >
+          <Text style={[styles.dangerButtonText, disablesTaskActions ? styles.disabledButtonText : null]}>
+            スキップ
+          </Text>
         </Pressable>
       </View>
 
@@ -382,12 +472,28 @@ const styles = StyleSheet.create({
   topRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: 12,
     justifyContent: 'space-between',
   },
   progress: {
     color: '#e5e7eb',
     fontSize: 16,
     fontWeight: '800',
+  },
+  modeGroup: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  advanceToggle: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  advanceToggleText: {
+    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '900',
   },
   modeLabel: {
     backgroundColor: '#fee2e2',
@@ -418,6 +524,45 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 16,
     fontWeight: '700',
+  },
+  pausedLabel: {
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    color: '#e5e7eb',
+    fontSize: 14,
+    fontWeight: '900',
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  timeUpBox: {
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+    borderRadius: 8,
+    gap: 8,
+    padding: 14,
+    width: '100%',
+  },
+  timeUpTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  timeUpText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  nextButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  nextButtonText: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '900',
   },
   nextPanel: {
     backgroundColor: '#1f2937',
@@ -467,6 +612,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  disabledButton: {
+    backgroundColor: '#d1d5db',
+  },
+  disabledButtonText: {
+    color: '#9ca3af',
   },
   savingOverlay: {
     alignItems: 'center',

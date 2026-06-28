@@ -7,6 +7,7 @@ export type ShortenPolicy = 'NEVER' | 'ALLOW';
 
 export type RunMode = 'NORMAL' | 'EMERGENCY';
 export type RunStatus = 'COMPLETED' | 'CANCELED' | 'ABANDONED';
+export type AdvanceMode = 'AUTO' | 'MANUAL';
 
 export type TaskRunStatus = 'COMPLETED' | 'AUTO_COMPLETED' | 'SKIPPED' | 'TIMEOUT' | 'EXTENDED';
 
@@ -68,6 +69,7 @@ export interface TaskLog {
   endedAt?: string | null;
   extensionSec: number;
   orderIndex: number;
+  note?: string | null;
 }
 
 export type SuggestionType =

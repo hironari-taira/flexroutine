@@ -71,6 +71,75 @@ export async function upsertTask(db: SQLiteDatabase, task: Task) {
   );
 }
 
+export async function updateTaskDetails(
+  db: SQLiteDatabase,
+  taskId: string,
+  values: Pick<
+    Task,
+    'title' | 'normalDurationSec' | 'minDurationSec' | 'emergencyBehavior' | 'skipPolicy' | 'shortenPolicy'
+  >,
+) {
+  const nowIso = new Date().toISOString();
+  await db.runAsync(
+    `
+      UPDATE tasks
+      SET
+        title = ?,
+        normal_duration_sec = ?,
+        min_duration_sec = ?,
+        emergency_behavior = ?,
+        skip_policy = ?,
+        shorten_policy = ?,
+        updated_at = ?
+      WHERE id = ? AND archived_at IS NULL
+    `,
+    values.title,
+    values.normalDurationSec,
+    values.minDurationSec,
+    values.emergencyBehavior,
+    values.skipPolicy,
+    values.shortenPolicy,
+    nowIso,
+    taskId,
+  );
+}
+
+export async function archiveTask(db: SQLiteDatabase, taskId: string) {
+  const nowIso = new Date().toISOString();
+  await db.runAsync(
+    'UPDATE tasks SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL',
+    nowIso,
+    nowIso,
+    taskId,
+  );
+}
+
+export async function moveTask(db: SQLiteDatabase, routineId: string, taskId: string, direction: 'UP' | 'DOWN') {
+  const tasks = await listTasksByRoutineId(db, routineId);
+  const currentIndex = tasks.findIndex((task) => task.id === taskId);
+  const targetIndex = direction === 'UP' ? currentIndex - 1 : currentIndex + 1;
+
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= tasks.length) {
+    return;
+  }
+
+  const reordered = tasks.slice();
+  const [currentTask] = reordered.splice(currentIndex, 1);
+  reordered.splice(targetIndex, 0, currentTask);
+  const nowIso = new Date().toISOString();
+
+  await db.withTransactionAsync(async () => {
+    for (const [index, task] of reordered.entries()) {
+      await db.runAsync(
+        'UPDATE tasks SET order_index = ?, updated_at = ? WHERE id = ?',
+        index,
+        nowIso,
+        task.id,
+      );
+    }
+  });
+}
+
 function mapTaskRow(row: TaskRow): Task {
   return {
     id: row.id,
