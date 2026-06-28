@@ -12,6 +12,7 @@ export interface RunPlanItem {
   orderIndex: number;
   normalDurationSec: number;
   minDurationSec: number;
+  emergencyNote?: string | null;
   plannedDurationSec: number;
   emergencyBehavior: EmergencyBehavior;
   status: 'PLANNED' | 'SHORTENED' | 'SKIPPED';
@@ -62,6 +63,7 @@ export function createRunPlan(tasks: Task[], mode: RunMode, targetTotalSec?: num
       orderIndex: task.orderIndex,
       normalDurationSec: task.normalDurationSec,
       minDurationSec: task.minDurationSec,
+      emergencyNote: task.emergencyNote ?? null,
       plannedDurationSec: task.normalDurationSec,
       emergencyBehavior: task.emergencyBehavior,
       status: 'PLANNED',
@@ -86,6 +88,7 @@ export function createRunPlan(tasks: Task[], mode: RunMode, targetTotalSec?: num
     orderIndex: task.orderIndex,
     normalDurationSec: task.normalDurationSec,
     minDurationSec: task.minDurationSec,
+    emergencyNote: task.emergencyNote ?? null,
     plannedDurationSec: task.normalDurationSec,
     emergencyBehavior: task.emergencyBehavior,
     status: 'PLANNED',

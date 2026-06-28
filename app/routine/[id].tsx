@@ -1,42 +1,54 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Section } from '@/components/ui/Section';
 import { getDatabase, initializeDatabase } from '@/db/database';
+import {
+  archiveRoutine,
+  getRoutineWithTasks,
+  type RoutineWithTasks,
+  updateRoutineDetails,
+} from '@/db/repositories/routineRepository';
 import {
   archiveTask,
   moveTask,
   updateTaskDetails,
   upsertTask,
 } from '@/db/repositories/taskRepository';
-import {
-  getRoutineWithTasks,
-  type RoutineWithTasks,
-} from '@/db/repositories/routineRepository';
-import type { EmergencyBehavior, Task } from '@/types/models';
+import { cancelRoutineNotification, scheduleRoutineNotification } from '@/services/notificationService';
+import type { EmergencyBehavior, RoutineContext, Task } from '@/types/models';
 import { createId } from '@/utils/ids';
 import { formatDuration } from '@/utils/time';
 
 const behaviorOptions: { label: string; value: EmergencyBehavior }[] = [
-  { label: '絶対やる', value: 'MUST_DO' },
-  { label: '短くしてやる', value: 'SHRINKABLE' },
+  { label: '必ずやる', value: 'MUST_DO' },
+  { label: '短くする', value: 'SHRINKABLE' },
   { label: '余裕があれば', value: 'OPTIONAL' },
+];
+
+const contextOptions: { label: string; value: RoutineContext }[] = [
+  { label: '朝', value: 'MORNING' },
+  { label: '夜', value: 'NIGHT' },
+  { label: '仕事前', value: 'WORK_START' },
+  { label: 'カスタム', value: 'CUSTOM' },
 ];
 
 export default function RoutineDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [routine, setRoutine] = useState<RoutineWithTasks | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [isEditingRoutine, setIsEditingRoutine] = useState(false);
+  const [routineTitle, setRoutineTitle] = useState('');
+  const [routineIcon, setRoutineIcon] = useState('');
+  const [routineContext, setRoutineContext] = useState<RoutineContext>('CUSTOM');
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const [notificationTime, setNotificationTime] = useState('07:30');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskNormalMin, setNewTaskNormalMin] = useState('3');
   const [newTaskMinMin, setNewTaskMinMin] = useState('1');
@@ -50,15 +62,64 @@ export default function RoutineDetailScreen() {
     await initializeDatabase(db);
     const nextRoutine = await getRoutineWithTasks(db, id);
     setRoutine(nextRoutine);
-    setIsLoading(false);
+    if (nextRoutine) {
+      setRoutineTitle(nextRoutine.title);
+      setRoutineIcon(nextRoutine.icon ?? '⏱️');
+      setRoutineContext(nextRoutine.context);
+      setNotificationEnabled(nextRoutine.notificationEnabled);
+      setNotificationTime(nextRoutine.notificationTime ?? nextRoutine.defaultStartTime ?? '07:30');
+    }
   }, [id]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void load();
-    }, 0);
-    return () => clearTimeout(timer);
+    void Promise.resolve().then(load);
   }, [load]);
+
+  const saveRoutine = async () => {
+    if (!routine) {
+      return;
+    }
+    const db = await getDatabase();
+    await initializeDatabase(db);
+    const values = {
+      title: routineTitle.trim() || routine.title,
+      context: routineContext,
+      icon: routineIcon.trim() || '⏱️',
+      defaultStartTime: notificationTime,
+      notificationEnabled,
+      notificationTime,
+    };
+    await updateRoutineDetails(db, routine.id, values);
+    if (notificationEnabled) {
+      await scheduleRoutineNotification({ ...routine, ...values });
+    } else {
+      await cancelRoutineNotification(routine.id);
+    }
+    setIsEditingRoutine(false);
+    await load();
+  };
+
+  const confirmArchiveRoutine = () => {
+    if (!routine) {
+      return;
+    }
+    Alert.alert('ルーティンを削除しますか？', '過去の実行ログは残ります。', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const db = await getDatabase();
+            await initializeDatabase(db);
+            await archiveRoutine(db, routine.id);
+            await cancelRoutineNotification(routine.id);
+            router.replace('/');
+          })();
+        },
+      },
+    ]);
+  };
 
   const handleMove = async (taskId: string, direction: 'UP' | 'DOWN') => {
     if (!routine) {
@@ -70,53 +131,26 @@ export default function RoutineDetailScreen() {
     await load();
   };
 
-  const handleArchive = async (task: Task) => {
-    Alert.alert('タスクを外しますか？', 'このタスクを今後のルーティンから外します。過去の実行ログは残ります。', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            const db = await getDatabase();
-            await initializeDatabase(db);
-            await archiveTask(db, task.id);
-            await load();
-          })();
-        },
-      },
-    ]);
-  };
-
   const handleAddTask = async () => {
-    if (!routine) {
-      return;
-    }
-    const title = newTaskTitle.trim();
-    const normalDurationSec = Math.max(30, Number.parseInt(newTaskNormalMin || '1', 10) * 60);
-    const minDurationSec = Math.min(
-      normalDurationSec,
-      Math.max(0, Number.parseInt(newTaskMinMin || '0', 10) * 60),
-    );
-
-    if (!title) {
+    if (!routine || !newTaskTitle.trim()) {
       Alert.alert('タスク名を入力してください');
       return;
     }
-
-    const nowIso = new Date().toISOString();
+    const normalDurationSec = Math.max(30, Number.parseInt(newTaskNormalMin || '1', 10) * 60);
+    const minDurationSec = Math.min(normalDurationSec, Math.max(0, Number.parseInt(newTaskMinMin || '0', 10) * 60));
     const policies = behaviorToPolicies(newTaskBehavior);
+    const nowIso = new Date().toISOString();
     const db = await getDatabase();
     await initializeDatabase(db);
     await upsertTask(db, {
       id: createId('task'),
       routineId: routine.id,
-      title,
+      title: newTaskTitle.trim(),
       normalDurationSec,
       minDurationSec,
+      emergencyNote: '',
       emergencyBehavior: newTaskBehavior,
-      skipPolicy: policies.skipPolicy,
-      shortenPolicy: policies.shortenPolicy,
+      ...policies,
       orderIndex: routine.tasks.length,
       announceThirtySecBefore: true,
       autoAdvanceOnTimeout: true,
@@ -128,14 +162,6 @@ export default function RoutineDetailScreen() {
     await load();
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
   if (!routine) {
     return (
       <View style={styles.centered}>
@@ -146,208 +172,199 @@ export default function RoutineDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.summary}>
+      <Card style={styles.summary}>
         <Text style={styles.icon}>{routine.icon}</Text>
-        <Text style={styles.title}>{routine.title}</Text>
-        <Text style={styles.meta}>
-          通常 {formatDuration(routine.normalTotalSec)} / 最低限{' '}
-          {formatDuration(routine.minimumTotalSec)}
-        </Text>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          style={styles.primaryButton}
-          onPress={() =>
-            router.push({ pathname: '/routine/[id]/run', params: { id: routine.id, mode: 'normal' } })
-          }
-        >
-          <Text style={styles.primaryButtonText}>通常スタート</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={styles.emergencyButton}
-          onPress={() =>
-            router.push({
-              pathname: '/routine/[id]/run',
-              params: { id: routine.id, mode: 'emergency' },
-            })
-          }
-        >
-          <Text style={styles.emergencyButtonText}>緊急！時短スタート</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>タスク編集</Text>
-        <Text style={styles.sectionNote}>保存すると次の実行プランに反映されます。</Text>
-      </View>
-
-      <View style={styles.taskList}>
-        {routine.tasks.map((task, index) => (
-          <TaskEditor
-            index={index}
-            isFirst={index === 0}
-            isLast={index === routine.tasks.length - 1}
-            key={task.id}
-            task={task}
-            onArchive={handleArchive}
-            onMove={handleMove}
-            onSaved={load}
-          />
-        ))}
-      </View>
-
-      <View style={styles.addCard}>
-        <Text style={styles.sectionTitle}>タスク追加</Text>
-        <TextInput
-          placeholder="新しいタスク名"
-          style={styles.input}
-          value={newTaskTitle}
-          onChangeText={setNewTaskTitle}
+        <View style={styles.summaryText}>
+          <Text style={styles.title}>{routine.title}</Text>
+          <Text style={styles.meta}>
+            通常 {formatDuration(routine.normalTotalSec)} / 最低限 {formatDuration(routine.minimumTotalSec)}
+          </Text>
+        </View>
+        <Button
+          label={isEditingRoutine ? '閉じる' : '編集'}
+          variant="secondary"
+          onPress={() => setIsEditingRoutine((v) => !v)}
+          style={styles.routineEditButton}
         />
-        <View style={styles.inlineInputs}>
-          <LabeledInput
-            label="通常(分)"
-            value={newTaskNormalMin}
-            onChangeText={(value) => setNewTaskNormalMin(value.replace(/[^0-9]/g, ''))}
-          />
-          <LabeledInput
-            label="最小(分)"
-            value={newTaskMinMin}
-            onChangeText={(value) => setNewTaskMinMin(value.replace(/[^0-9]/g, ''))}
-          />
+      </Card>
+
+      {isEditingRoutine ? (
+        <Card style={styles.cardGap}>
+          <Text style={styles.label}>ルーティン名</Text>
+          <Input value={routineTitle} onChangeText={setRoutineTitle} />
+          <Text style={styles.label}>アイコン</Text>
+          <Input value={routineIcon} onChangeText={setRoutineIcon} />
+          <Text style={styles.label}>用途</Text>
+          <View style={styles.chipRow}>
+            {contextOptions.map((option) => (
+              <Button
+                key={option.value}
+                label={option.label}
+                variant={routineContext === option.value ? 'primary' : 'secondary'}
+                onPress={() => setRoutineContext(option.value)}
+              />
+            ))}
+          </View>
+          <Text style={styles.label}>通知</Text>
+          <View style={styles.inlineActions}>
+            <Button
+              label={notificationEnabled ? '通知 ON' : '通知 OFF'}
+              variant={notificationEnabled ? 'primary' : 'secondary'}
+              onPress={() => setNotificationEnabled((v) => !v)}
+              style={styles.flexButton}
+            />
+            <Input value={notificationTime} onChangeText={(value) => setNotificationTime(value.slice(0, 5))} style={styles.timeInput} />
+          </View>
+          <View style={styles.inlineActions}>
+            <Button label="保存" onPress={saveRoutine} style={styles.flexButton} />
+            <Button label="削除" variant="destructive" onPress={confirmArchiveRoutine} style={styles.flexButton} />
+          </View>
+        </Card>
+      ) : null}
+
+      <View style={styles.inlineActions}>
+        <Button
+          label="通常スタート"
+          onPress={() => router.push({ pathname: '/routine/[id]/run', params: { id: routine.id, mode: 'normal' } })}
+          style={styles.flexButton}
+        />
+        <Button
+          label="緊急・時短"
+          variant="destructive"
+          onPress={() => router.push({ pathname: '/routine/[id]/run', params: { id: routine.id, mode: 'emergency' } })}
+          style={styles.flexButton}
+        />
+      </View>
+
+      <Button
+        label={isEditingRoutine ? 'ルーティン設定を閉じる' : 'ルーティン設定'}
+        variant="secondary"
+        onPress={() => setIsEditingRoutine((v) => !v)}
+      />
+
+      <Section title="タスク" hint="場所・移動順を意識して並べると、自然に体が動きます。">
+        <View style={styles.taskList}>
+          {routine.tasks.map((task, index) => (
+            <TaskRow
+              index={index}
+              isExpanded={expandedTaskId === task.id}
+              isFirst={index === 0}
+              isLast={index === routine.tasks.length - 1}
+              key={task.id}
+              task={task}
+              onArchive={async () => {
+                const db = await getDatabase();
+                await initializeDatabase(db);
+                await archiveTask(db, task.id);
+                await load();
+              }}
+              onMove={handleMove}
+              onSaved={load}
+              onToggle={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
+            />
+          ))}
+        </View>
+      </Section>
+
+      <Card style={styles.cardGap}>
+        <Text style={styles.sectionTitle}>タスク追加</Text>
+        <Input placeholder="新しいタスク名" value={newTaskTitle} onChangeText={setNewTaskTitle} />
+        <View style={styles.inlineActions}>
+          <Input value={newTaskNormalMin} onChangeText={(v) => setNewTaskNormalMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
+          <Input value={newTaskMinMin} onChangeText={(v) => setNewTaskMinMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
         </View>
         <BehaviorPicker value={newTaskBehavior} onChange={setNewTaskBehavior} />
-        <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={handleAddTask}>
-          <Text style={styles.primaryButtonText}>追加する</Text>
-        </Pressable>
-      </View>
+        <Button label="追加する" onPress={handleAddTask} />
+      </Card>
     </ScrollView>
   );
 }
 
-function TaskEditor({
+function TaskRow({
   index,
+  isExpanded,
   isFirst,
   isLast,
   onArchive,
   onMove,
   onSaved,
+  onToggle,
   task,
 }: {
   index: number;
+  isExpanded: boolean;
   isFirst: boolean;
   isLast: boolean;
-  onArchive: (task: Task) => void;
+  onArchive: () => Promise<void>;
   onMove: (taskId: string, direction: 'UP' | 'DOWN') => Promise<void>;
   onSaved: () => Promise<void>;
+  onToggle: () => void;
   task: Task;
 }) {
   const [title, setTitle] = useState(task.title);
   const [normalMin, setNormalMin] = useState(String(Math.max(1, Math.round(task.normalDurationSec / 60))));
   const [minMin, setMinMin] = useState(String(Math.round(task.minDurationSec / 60)));
   const [behavior, setBehavior] = useState<EmergencyBehavior>(task.emergencyBehavior);
-  const [isSaving, setIsSaving] = useState(false);
+  const [emergencyNote, setEmergencyNote] = useState(task.emergencyNote ?? '');
 
-  const handleSave = async () => {
-    const trimmedTitle = title.trim();
+  const save = async () => {
     const normalDurationSec = Math.max(30, Number.parseInt(normalMin || '1', 10) * 60);
-    const minDurationSec = Math.min(
-      normalDurationSec,
-      Math.max(0, Number.parseInt(minMin || '0', 10) * 60),
-    );
-
-    if (!trimmedTitle) {
-      Alert.alert('タスク名を入力してください');
-      return;
-    }
-
-    setIsSaving(true);
+    const minDurationSec = Math.min(normalDurationSec, Math.max(0, Number.parseInt(minMin || '0', 10) * 60));
     const db = await getDatabase();
     await initializeDatabase(db);
     await updateTaskDetails(db, task.id, {
-      title: trimmedTitle,
+      title: title.trim() || task.title,
       normalDurationSec,
       minDurationSec,
+      emergencyNote: emergencyNote.trim() || null,
       emergencyBehavior: behavior,
       ...behaviorToPolicies(behavior),
     });
     await onSaved();
-    setIsSaving(false);
   };
 
   return (
-    <View style={styles.taskCard}>
-      <View style={styles.taskHeader}>
+    <Card style={styles.taskCard}>
+      <Pressable accessibilityRole="button" style={styles.taskCompact} onPress={onToggle}>
         <Text style={styles.orderBadge}>{index + 1}</Text>
-        <TextInput style={styles.taskTitleInput} value={title} onChangeText={setTitle} />
-      </View>
-
-      <View style={styles.inlineInputs}>
-        <LabeledInput
-          label="通常(分)"
-          value={normalMin}
-          onChangeText={(value) => setNormalMin(value.replace(/[^0-9]/g, ''))}
+        <View style={styles.taskText}>
+          <Text style={styles.taskTitle}>{task.title}</Text>
+          <Text style={styles.taskMeta}>
+            {formatDuration(task.normalDurationSec)} / 最低 {formatDuration(task.minDurationSec)}
+          </Text>
+        </View>
+        <Badge
+          label={task.emergencyBehavior === 'OPTIONAL' ? '余裕' : task.emergencyBehavior === 'SHRINKABLE' ? '短縮' : '必須'}
+          tone={task.emergencyBehavior === 'OPTIONAL' ? 'warning' : 'info'}
         />
-        <LabeledInput
-          label="最小(分)"
-          value={minMin}
-          onChangeText={(value) => setMinMin(value.replace(/[^0-9]/g, ''))}
-        />
+      </Pressable>
+
+      <View style={styles.inlineActions}>
+        <Button label="↑" variant="secondary" disabled={isFirst} onPress={() => void onMove(task.id, 'UP')} />
+        <Button label="↓" variant="secondary" disabled={isLast} onPress={() => void onMove(task.id, 'DOWN')} />
+        <Button label={isExpanded ? '閉じる' : '編集'} variant="ghost" onPress={onToggle} style={styles.flexButton} />
       </View>
 
-      <BehaviorPicker value={behavior} onChange={setBehavior} />
-
-      <View style={styles.rowActions}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={isFirst}
-          style={[styles.smallButton, isFirst ? styles.disabledButton : null]}
-          onPress={() => void onMove(task.id, 'UP')}
-        >
-          <Text style={[styles.smallButtonText, isFirst ? styles.disabledText : null]}>上へ</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={isLast}
-          style={[styles.smallButton, isLast ? styles.disabledButton : null]}
-          onPress={() => void onMove(task.id, 'DOWN')}
-        >
-          <Text style={[styles.smallButtonText, isLast ? styles.disabledText : null]}>下へ</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>{isSaving ? '保存中' : '保存'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" style={styles.deleteButton} onPress={() => onArchive(task)}>
-          <Text style={styles.deleteButtonText}>削除</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function LabeledInput({
-  label,
-  onChangeText,
-  value,
-}: {
-  label: string;
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <View style={styles.labeledInput}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        inputMode="numeric"
-        keyboardType="number-pad"
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-      />
-    </View>
+      {isExpanded ? (
+        <View style={styles.expanded}>
+          <Input value={title} onChangeText={setTitle} />
+          <View style={styles.inlineActions}>
+            <Input value={normalMin} onChangeText={(v) => setNormalMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
+            <Input value={minMin} onChangeText={(v) => setMinMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
+          </View>
+          <BehaviorPicker value={behavior} onChange={setBehavior} />
+          <Input
+            placeholder="時短版では何をする？ 例: 髪だけ整える"
+            value={emergencyNote}
+            onChangeText={setEmergencyNote}
+          />
+          <View style={styles.inlineActions}>
+            <Button label="保存" onPress={save} style={styles.flexButton} />
+            <Button label="削除" variant="destructive" onPress={() => void onArchive()} style={styles.flexButton} />
+          </View>
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
@@ -359,23 +376,14 @@ function BehaviorPicker({
   value: EmergencyBehavior;
 }) {
   return (
-    <View style={styles.behaviorRow}>
+    <View style={styles.chipRow}>
       {behaviorOptions.map((option) => (
-        <Pressable
-          accessibilityRole="button"
+        <Button
           key={option.value}
-          style={[styles.behaviorChip, value === option.value ? styles.behaviorChipSelected : null]}
+          label={option.label}
+          variant={value === option.value ? 'primary' : 'secondary'}
           onPress={() => onChange(option.value)}
-        >
-          <Text
-            style={[
-              styles.behaviorChipText,
-              value === option.value ? styles.behaviorChipTextSelected : null,
-            ]}
-          >
-            {option.label}
-          </Text>
-        </Pressable>
+        />
       ))}
     </View>
   );
@@ -403,70 +411,65 @@ const styles = StyleSheet.create({
     color: '#52606d',
   },
   summary: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    gap: 8,
-    padding: 18,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
   },
   icon: {
     fontSize: 28,
   },
+  summaryText: {
+    flex: 1,
+    gap: 4,
+  },
+  routineEditButton: {
+    marginRight: 56,
+    minWidth: 96,
+  },
   title: {
     color: '#111827',
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
   },
   meta: {
     color: '#52606d',
-    fontSize: 15,
+    fontSize: 14,
   },
-  actions: {
+  cardGap: {
     gap: 10,
   },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingVertical: 14,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  emergencyButton: {
-    alignItems: 'center',
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
-    paddingVertical: 14,
-  },
-  emergencyButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
+  label: {
+    color: '#475569',
+    fontSize: 13,
     fontWeight: '800',
-  },
-  sectionHeader: {
-    gap: 4,
   },
   sectionTitle: {
     color: '#111827',
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  sectionNote: {
-    color: '#52606d',
-    fontSize: 13,
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  flexButton: {
+    flex: 1,
+  },
+  timeInput: {
+    flex: 1,
   },
   taskList: {
     gap: 10,
   },
   taskCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    gap: 12,
-    padding: 14,
+    gap: 10,
   },
-  taskHeader: {
+  taskCompact: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
@@ -482,109 +485,20 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     textAlign: 'center',
   },
-  taskTitleInput: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    borderWidth: 1,
+  taskText: {
+    flex: 1,
+    gap: 3,
+  },
+  taskTitle: {
     color: '#111827',
-    flex: 1,
     fontSize: 16,
-    fontWeight: '800',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    fontWeight: '900',
   },
-  inlineInputs: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  labeledInput: {
-    flex: 1,
-    gap: 5,
-  },
-  inputLabel: {
+  taskMeta: {
     color: '#64748b',
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
   },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '800',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  behaviorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  behaviorChip: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  behaviorChipSelected: {
-    backgroundColor: '#111827',
-  },
-  behaviorChipText: {
-    color: '#334155',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  behaviorChipTextSelected: {
-    color: '#ffffff',
-  },
-  rowActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  smallButton: {
-    backgroundColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  smallButtonText: {
-    color: '#111827',
-    fontWeight: '800',
-  },
-  saveButton: {
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-  },
-  saveButtonText: {
-    color: '#ffffff',
-    fontWeight: '900',
-  },
-  deleteButton: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  deleteButtonText: {
-    color: '#991b1b',
-    fontWeight: '900',
-  },
-  disabledButton: {
-    backgroundColor: '#f1f5f9',
-  },
-  disabledText: {
-    color: '#94a3b8',
-  },
-  addCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    gap: 12,
-    padding: 14,
+  expanded: {
+    gap: 10,
   },
 });

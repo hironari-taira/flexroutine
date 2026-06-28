@@ -1,9 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RoutineCard } from '@/components/RoutineCard';
 import { SuggestionCard } from '@/components/SuggestionCard';
+import { Button } from '@/components/ui/Button';
 import { getDatabase, initializeDatabase } from '@/db/database';
 import { listRoutineCards, type RoutineCardView } from '@/db/repositories/routineRepository';
 import { buildHomeSuggestion, type HomeSuggestion } from '@/features/suggestions/homeSuggestion';
@@ -42,10 +43,14 @@ export default function HomeScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
         <Text style={styles.appName}>FlexRoutine</Text>
-        <Text style={styles.heading}>今日も短縮版で大丈夫</Text>
+        <Text style={styles.heading}>今日も最低限から整える</Text>
         <Text style={styles.subheading}>
-          寝坊しても、予定が崩れても、今日の最低限まで組み直します。
+          予定が崩れても、動ける順番に並べたルーティンで最後まで進めます。
         </Text>
+        <View style={styles.headerActions}>
+          <Button label="新しいルーティン" onPress={() => router.push('/routine/new')} style={styles.headerButton} />
+          <Button label="履歴" variant="secondary" onPress={() => router.push('/history')} style={styles.headerButton} />
+        </View>
       </View>
 
       {state.status === 'loading' ? (
@@ -59,9 +64,7 @@ export default function HomeScreen() {
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>読み込みに失敗しました</Text>
           <Text style={styles.errorMessage}>{state.message}</Text>
-          <Pressable accessibilityRole="button" style={styles.retryButton} onPress={load}>
-            <Text style={styles.retryButtonText}>再読み込み</Text>
-          </Pressable>
+          <Button label="再読み込み" variant="destructive" onPress={load} />
         </View>
       ) : null}
 
@@ -126,6 +129,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  headerButton: {
+    flex: 1,
+  },
   section: {
     gap: 12,
   },
@@ -157,18 +168,5 @@ const styles = StyleSheet.create({
     color: '#9f1239',
     fontSize: 14,
     lineHeight: 20,
-  },
-  retryButton: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#be123c',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

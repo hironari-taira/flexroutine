@@ -2,6 +2,24 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { ExecutionLog, TaskLog } from '@/types/models';
 
+interface ExecutionLogRow {
+  id: string;
+  routine_id: string;
+  routine_title: string | null;
+  mode: ExecutionLog['mode'];
+  status: ExecutionLog['status'];
+  target_total_sec: number | null;
+  planned_total_sec: number;
+  actual_total_sec: number | null;
+  started_at: string;
+  completed_at: string | null;
+  pause_total_sec: number;
+  used_emergency: number;
+  optional_note: string | null;
+  completed_count?: number;
+  skipped_count?: number;
+}
+
 interface TaskLogRow {
   id: string;
   execution_log_id: string;
@@ -138,6 +156,69 @@ export async function listTaskLogsByExecutionLogId(
   return rows.map(mapTaskLogRow);
 }
 
+export interface ExecutionLogSummary extends ExecutionLog {
+  completedCount: number;
+  routineTitle: string;
+  skippedCount: number;
+}
+
+export async function listExecutionLogSummaries(db: SQLiteDatabase): Promise<ExecutionLogSummary[]> {
+  const rows = await db.getAllAsync<ExecutionLogRow>(
+    `
+      SELECT
+        execution_logs.*,
+        routines.title AS routine_title,
+        SUM(CASE WHEN task_logs.status != 'SKIPPED' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN task_logs.status = 'SKIPPED' THEN 1 ELSE 0 END) AS skipped_count
+      FROM execution_logs
+      LEFT JOIN routines ON routines.id = execution_logs.routine_id
+      LEFT JOIN task_logs ON task_logs.execution_log_id = execution_logs.id
+      GROUP BY execution_logs.id
+      ORDER BY execution_logs.started_at DESC
+      LIMIT 50
+    `,
+  );
+
+  return rows.map((row) => ({
+    ...mapExecutionLogRow(row),
+    completedCount: row.completed_count ?? 0,
+    routineTitle: row.routine_title ?? 'ルーティン',
+    skippedCount: row.skipped_count ?? 0,
+  }));
+}
+
+export async function getExecutionLogById(
+  db: SQLiteDatabase,
+  executionLogId: string,
+): Promise<ExecutionLogSummary | null> {
+  const row = await db.getFirstAsync<ExecutionLogRow>(
+    `
+      SELECT
+        execution_logs.*,
+        routines.title AS routine_title,
+        SUM(CASE WHEN task_logs.status != 'SKIPPED' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN task_logs.status = 'SKIPPED' THEN 1 ELSE 0 END) AS skipped_count
+      FROM execution_logs
+      LEFT JOIN routines ON routines.id = execution_logs.routine_id
+      LEFT JOIN task_logs ON task_logs.execution_log_id = execution_logs.id
+      WHERE execution_logs.id = ?
+      GROUP BY execution_logs.id
+    `,
+    executionLogId,
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...mapExecutionLogRow(row),
+    completedCount: row.completed_count ?? 0,
+    routineTitle: row.routine_title ?? 'ルーティン',
+    skippedCount: row.skipped_count ?? 0,
+  };
+}
+
 export async function updateTaskLogNotes(
   db: SQLiteDatabase,
   notes: { note: string | null; taskLogId: string }[],
@@ -163,5 +244,22 @@ function mapTaskLogRow(row: TaskLogRow): TaskLog {
     extensionSec: row.extension_sec,
     orderIndex: row.order_index,
     note: row.note,
+  };
+}
+
+function mapExecutionLogRow(row: ExecutionLogRow): ExecutionLog {
+  return {
+    id: row.id,
+    routineId: row.routine_id,
+    mode: row.mode,
+    status: row.status,
+    targetTotalSec: row.target_total_sec,
+    plannedTotalSec: row.planned_total_sec,
+    actualTotalSec: row.actual_total_sec,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    pauseTotalSec: row.pause_total_sec,
+    usedEmergency: row.used_emergency === 1,
+    optionalNote: row.optional_note,
   };
 }

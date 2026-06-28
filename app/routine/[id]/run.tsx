@@ -1,15 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { getDatabase, initializeDatabase } from '@/db/database';
 import {
   getRoutineWithTasks,
@@ -90,55 +86,40 @@ export default function RunPreviewScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>
-          {runMode === 'EMERGENCY' ? '短縮版の準備' : '通常スタートの準備'}
-        </Text>
+      <Card style={styles.card}>
+        <Text style={styles.eyebrow}>{runMode === 'EMERGENCY' ? '時短プレビュー' : '通常スタート'}</Text>
         <Text style={styles.title}>{routine.title}</Text>
         <Text style={styles.body}>
           {runMode === 'EMERGENCY'
-            ? '今日の持ち時間に合わせて、最低限を守る実行プランを作ります。'
-            : '通常時間で全タスクを順番に進めます。'}
+            ? '持ち時間に合わせて、守るタスクと短くするタスクを整理しました。'
+            : '通常時間で、並び順どおりに進めます。'}
         </Text>
-      </View>
+      </Card>
 
       {runMode === 'EMERGENCY' ? (
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.sectionTitle}>今日の持ち時間</Text>
           <View style={styles.quickRow}>
-            {quickMinutes.map((minutes) => (
-              <Pressable
-                accessibilityRole="button"
-                key={minutes}
-                style={[
-                  styles.quickChip,
-                  targetMinutes === String(minutes) ? styles.quickChipSelected : null,
-                ]}
-                onPress={() => setTargetMinutes(String(minutes))}
-              >
-                <Text
-                  style={[
-                    styles.quickChipText,
-                    targetMinutes === String(minutes) ? styles.quickChipTextSelected : null,
-                  ]}
-                >
-                  {minutes}分
-                </Text>
-              </Pressable>
+            {quickMinutes.map((minute) => (
+              <Button
+                key={minute}
+                label={`${minute}分`}
+                variant={targetMinutes === String(minute) ? 'primary' : 'secondary'}
+                onPress={() => setTargetMinutes(String(minute))}
+              />
             ))}
           </View>
-          <TextInput
+          <Input
             accessibilityLabel="今日の持ち時間を分で入力"
             inputMode="numeric"
             keyboardType="number-pad"
-            style={styles.input}
             value={targetMinutes}
             onChangeText={(value) => setTargetMinutes(value.replace(/[^0-9]/g, ''))}
           />
-        </View>
+        </Card>
       ) : null}
 
-      <View style={styles.card}>
+      <Card style={styles.card}>
         <Text style={styles.sectionTitle}>今日のプラン</Text>
         <View style={styles.summaryGrid}>
           <Summary label="通常" value={formatDuration(plan.normalTotalSec)} />
@@ -149,27 +130,15 @@ export default function RunPreviewScreen() {
 
         {hasTargetWarning ? (
           <View style={styles.warningBox}>
-            <Text style={styles.warningTitle}>
-              最低限でも{formatDuration(plan.minimumTotalSec)}必要です
-            </Text>
-            <Text style={styles.warningText}>
-              守る条件を破らず、最低限のプランで始められます。
-            </Text>
+            <Text style={styles.warningTitle}>最低限でも{formatDuration(plan.minimumTotalSec)}必要です</Text>
+            <Text style={styles.warningText}>守る条件を壊さず、最低限のプランで始めます。</Text>
           </View>
         ) : null}
-      </View>
+      </Card>
 
-      <Pressable
-        accessibilityRole="button"
-        style={styles.primaryButton}
-        onPress={startTimer}
-      >
-        <Text style={styles.primaryButtonText}>
-          {hasTargetWarning ? '最低限で始める' : 'このプランで始める'}
-        </Text>
-      </Pressable>
+      <Button label={hasTargetWarning ? '最低限で始める' : 'このプランで始める'} onPress={startTimer} />
 
-      <View style={styles.card}>
+      <Card style={styles.card}>
         <Text style={styles.sectionTitle}>実行内容</Text>
         {plan.items.map((item) => (
           <View key={item.taskId} style={styles.planRow}>
@@ -179,11 +148,14 @@ export default function RunPreviewScreen() {
                 通常 {formatDuration(item.normalDurationSec)}
                 {item.status !== 'SKIPPED' ? ` → ${formatDuration(item.plannedDurationSec)}` : ''}
               </Text>
+              {item.status === 'SHORTENED' && item.emergencyNote ? (
+                <Text style={styles.emergencyNote}>{item.emergencyNote}</Text>
+              ) : null}
             </View>
-            <Text style={[styles.statusBadge, statusStyle[item.status]]}>{statusLabel[item.status]}</Text>
+            <Badge label={statusLabel[item.status]} tone={statusTone[item.status]} />
           </View>
         ))}
-      </View>
+      </Card>
     </ScrollView>
   );
 }
@@ -203,11 +175,11 @@ const statusLabel = {
   SKIPPED: 'スキップ',
 };
 
-const statusStyle = {
-  PLANNED: { backgroundColor: '#eef2ff', color: '#3730a3' },
-  SHORTENED: { backgroundColor: '#fef3c7', color: '#92400e' },
-  SKIPPED: { backgroundColor: '#fee2e2', color: '#991b1b' },
-};
+const statusTone = {
+  PLANNED: 'info',
+  SHORTENED: 'warning',
+  SKIPPED: 'danger',
+} as const;
 
 const styles = StyleSheet.create({
   container: {
@@ -224,10 +196,7 @@ const styles = StyleSheet.create({
     color: '#52606d',
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
     gap: 12,
-    padding: 18,
   },
   eyebrow: {
     color: '#dc2626',
@@ -237,7 +206,7 @@ const styles = StyleSheet.create({
   title: {
     color: '#111827',
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   body: {
     color: '#52606d',
@@ -247,39 +216,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#111827',
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   quickRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  quickChip: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  quickChipSelected: {
-    backgroundColor: '#111827',
-  },
-  quickChipText: {
-    color: '#334155',
-    fontWeight: '700',
-  },
-  quickChipTextSelected: {
-    color: '#ffffff',
-  },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#111827',
-    fontSize: 22,
-    fontWeight: '800',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -342,23 +284,9 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 13,
   },
-  statusBadge: {
-    borderRadius: 8,
+  emergencyNote: {
+    color: '#92400e',
     fontSize: 12,
-    fontWeight: '800',
-    overflow: 'hidden',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingVertical: 15,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
     fontWeight: '800',
   },
 });

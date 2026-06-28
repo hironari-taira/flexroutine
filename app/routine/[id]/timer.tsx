@@ -8,6 +8,7 @@ import {
   View,
   type GestureResponderEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getDatabase, initializeDatabase } from '@/db/database';
 import { saveExecutionWithTaskLogs } from '@/db/repositories/logRepository';
@@ -36,6 +37,7 @@ interface TaskResult {
 
 export default function TimerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id, mode, targetSec } = useLocalSearchParams<{
     id: string;
     mode?: string;
@@ -373,7 +375,7 @@ export default function TimerScreen() {
   }
 
   return (
-    <Pressable style={styles.screen} onPress={handleScreenPress}>
+    <Pressable style={[styles.screen, { paddingTop: Math.max(22, insets.top + 12) }]} onPress={handleScreenPress}>
       <View style={styles.topRow}>
         <Text style={styles.progress}>
           {currentIndex + 1} / {runnableItems.length}
@@ -391,6 +393,9 @@ export default function TimerScreen() {
       <View style={styles.mainPanel}>
         <Text style={styles.taskTitle}>{currentItem.title}</Text>
         <Text style={styles.timer}>{formatClock(remainingSec)}</Text>
+        {currentItem.status === 'SHORTENED' && currentItem.emergencyNote ? (
+          <Text style={styles.emergencyNote}>{currentItem.emergencyNote}</Text>
+        ) : null}
         <Text style={styles.remaining}>全体残り {formatDuration(totalRemainingSec)}</Text>
         {isPaused ? <Text style={styles.pausedLabel}>一時停止中</Text> : null}
         {phase === 'TIME_UP_WAITING' ? (
@@ -524,6 +529,18 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 16,
     fontWeight: '700',
+  },
+  emergencyNote: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    color: '#92400e',
+    fontSize: 14,
+    fontWeight: '800',
+    maxWidth: 320,
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    textAlign: 'center',
   },
   pausedLabel: {
     backgroundColor: '#374151',

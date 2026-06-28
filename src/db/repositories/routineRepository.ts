@@ -110,6 +110,49 @@ export async function upsertRoutine(db: SQLiteDatabase, routine: Routine) {
   );
 }
 
+export async function updateRoutineDetails(
+  db: SQLiteDatabase,
+  routineId: string,
+  values: Pick<
+    Routine,
+    'title' | 'context' | 'icon' | 'defaultStartTime' | 'notificationEnabled' | 'notificationTime'
+  >,
+) {
+  const nowIso = new Date().toISOString();
+  await db.runAsync(
+    `
+      UPDATE routines
+      SET
+        title = ?,
+        context = ?,
+        icon = ?,
+        default_start_time = ?,
+        notification_enabled = ?,
+        notification_time = ?,
+        updated_at = ?
+      WHERE id = ? AND archived_at IS NULL
+    `,
+    values.title,
+    values.context,
+    values.icon ?? null,
+    values.defaultStartTime ?? null,
+    values.notificationEnabled ? 1 : 0,
+    values.notificationTime ?? null,
+    nowIso,
+    routineId,
+  );
+}
+
+export async function archiveRoutine(db: SQLiteDatabase, routineId: string) {
+  const nowIso = new Date().toISOString();
+  await db.runAsync(
+    'UPDATE routines SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL',
+    nowIso,
+    nowIso,
+    routineId,
+  );
+}
+
 function mapRoutineRow(row: RoutineRow): Routine {
   return {
     id: row.id,

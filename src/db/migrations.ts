@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 export async function runMigrations(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -34,6 +34,7 @@ export async function runMigrations(db: SQLiteDatabase) {
         title TEXT NOT NULL,
         normal_duration_sec INTEGER NOT NULL,
         min_duration_sec INTEGER NOT NULL,
+        emergency_note TEXT,
         emergency_behavior TEXT NOT NULL,
         skip_policy TEXT NOT NULL,
         shorten_policy TEXT NOT NULL,
@@ -104,6 +105,10 @@ export async function runMigrations(db: SQLiteDatabase) {
 
   if (currentVersion < 2) {
     await addColumnIfMissing(db, 'task_logs', 'note', 'TEXT');
+  }
+
+  if (currentVersion < 3) {
+    await addColumnIfMissing(db, 'tasks', 'emergency_note', 'TEXT');
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

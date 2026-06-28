@@ -31,6 +31,7 @@ export interface Task {
   title: string;
   normalDurationSec: number;
   minDurationSec: number;
+  emergencyNote?: string | null;
   emergencyBehavior: EmergencyBehavior;
   skipPolicy: SkipPolicy;
   shortenPolicy: ShortenPolicy;

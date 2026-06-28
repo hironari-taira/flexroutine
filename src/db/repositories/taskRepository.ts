@@ -8,6 +8,7 @@ interface TaskRow {
   title: string;
   normal_duration_sec: number;
   min_duration_sec: number;
+  emergency_note: string | null;
   emergency_behavior: Task['emergencyBehavior'];
   skip_policy: Task['skipPolicy'];
   shorten_policy: Task['shortenPolicy'];
@@ -42,6 +43,7 @@ export async function upsertTask(db: SQLiteDatabase, task: Task) {
         title,
         normal_duration_sec,
         min_duration_sec,
+        emergency_note,
         emergency_behavior,
         skip_policy,
         shorten_policy,
@@ -52,13 +54,14 @@ export async function upsertTask(db: SQLiteDatabase, task: Task) {
         updated_at,
         archived_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     task.id,
     task.routineId,
     task.title,
     task.normalDurationSec,
     task.minDurationSec,
+    task.emergencyNote ?? null,
     task.emergencyBehavior,
     task.skipPolicy,
     task.shortenPolicy,
@@ -76,7 +79,13 @@ export async function updateTaskDetails(
   taskId: string,
   values: Pick<
     Task,
-    'title' | 'normalDurationSec' | 'minDurationSec' | 'emergencyBehavior' | 'skipPolicy' | 'shortenPolicy'
+    | 'title'
+    | 'normalDurationSec'
+    | 'minDurationSec'
+    | 'emergencyNote'
+    | 'emergencyBehavior'
+    | 'skipPolicy'
+    | 'shortenPolicy'
   >,
 ) {
   const nowIso = new Date().toISOString();
@@ -87,6 +96,7 @@ export async function updateTaskDetails(
         title = ?,
         normal_duration_sec = ?,
         min_duration_sec = ?,
+        emergency_note = ?,
         emergency_behavior = ?,
         skip_policy = ?,
         shorten_policy = ?,
@@ -96,6 +106,7 @@ export async function updateTaskDetails(
     values.title,
     values.normalDurationSec,
     values.minDurationSec,
+    values.emergencyNote ?? null,
     values.emergencyBehavior,
     values.skipPolicy,
     values.shortenPolicy,
@@ -147,6 +158,7 @@ function mapTaskRow(row: TaskRow): Task {
     title: row.title,
     normalDurationSec: row.normal_duration_sec,
     minDurationSec: row.min_duration_sec,
+    emergencyNote: row.emergency_note,
     emergencyBehavior: row.emergency_behavior,
     skipPolicy: row.skip_policy,
     shortenPolicy: row.shorten_policy,

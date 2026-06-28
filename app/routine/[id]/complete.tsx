@@ -54,6 +54,8 @@ export default function CompletionScreen() {
   const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [showsNotes, setShowsNotes] = useState(false);
+  const [showTaskSummary, setShowTaskSummary] = useState(false);
+  const [showNoteSummary, setShowNoteSummary] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [noteMessage, setNoteMessage] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
@@ -157,6 +159,32 @@ export default function CompletionScreen() {
           <CardStat label="予定" value={formatDuration(Number(plannedSec ?? 0))} />
           <CardStat label="実績" value={formatDuration(Number(actualSec ?? 0))} />
         </View>
+        {showTaskSummary ? (
+          <View style={styles.cardSummaryBlock}>
+            <Text style={styles.cardSummaryTitle}>タスク概要</Text>
+            {taskLogs.slice(0, 5).map((log) => (
+              <Text key={log.id} style={styles.cardSummaryLine}>
+                - {log.taskTitleSnapshot}
+              </Text>
+            ))}
+            {taskLogs.length > 5 ? (
+              <Text style={styles.cardSummaryLine}>ほか {taskLogs.length - 5} 件</Text>
+            ) : null}
+          </View>
+        ) : null}
+        {showNoteSummary ? (
+          <View style={styles.cardSummaryBlock}>
+            <Text style={styles.cardSummaryTitle}>メモ</Text>
+            {taskLogs
+              .filter((log) => (notes[log.id] ?? '').trim().length > 0)
+              .slice(0, 3)
+              .map((log) => (
+                <Text key={log.id} style={styles.cardSummaryLine} numberOfLines={2}>
+                  {log.taskTitleSnapshot}: {(notes[log.id] ?? '').trim()}
+                </Text>
+              ))}
+          </View>
+        ) : null}
         <Text style={styles.cardFooter}>{new Date().toLocaleDateString('ja-JP')}</Text>
       </View>
 
@@ -240,6 +268,26 @@ export default function CompletionScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>共有</Text>
         <Text style={styles.subtleText}>カードをPNGにしてAndroid共有シートへ渡します。</Text>
+        <View style={styles.optionRow}>
+          <Pressable
+            accessibilityRole="button"
+            style={[styles.optionButton, showTaskSummary ? styles.optionButtonSelected : null]}
+            onPress={() => setShowTaskSummary((current) => !current)}
+          >
+            <Text style={[styles.optionButtonText, showTaskSummary ? styles.optionButtonTextSelected : null]}>
+              タスク概要 {showTaskSummary ? 'ON' : 'OFF'}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={[styles.optionButton, showNoteSummary ? styles.optionButtonSelected : null]}
+            onPress={() => setShowNoteSummary((current) => !current)}
+          >
+            <Text style={[styles.optionButtonText, showNoteSummary ? styles.optionButtonTextSelected : null]}>
+              メモ {showNoteSummary ? 'ON' : 'OFF'}
+            </Text>
+          </Pressable>
+        </View>
         <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={handleShare}>
           <Text style={styles.primaryButtonText}>{isSharing ? '準備中' : '画像で共有'}</Text>
         </Pressable>
@@ -318,6 +366,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  cardSummaryBlock: {
+    backgroundColor: '#ffffffaa',
+    borderRadius: 8,
+    gap: 5,
+    padding: 10,
+  },
+  cardSummaryTitle: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  cardSummaryLine: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
   cardStat: {
     backgroundColor: '#ffffffcc',
     borderRadius: 8,
@@ -380,6 +445,28 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   presetChipTextSelected: {
+    color: '#ffffff',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionButton: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  optionButtonSelected: {
+    backgroundColor: '#111827',
+  },
+  optionButtonText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  optionButtonTextSelected: {
     color: '#ffffff',
   },
   rowBetween: {
