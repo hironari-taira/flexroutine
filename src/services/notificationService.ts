@@ -1,4 +1,6 @@
 import type { Routine } from '@/types/models';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { Platform } from 'react-native';
 
 export interface NotificationResult {
   ok: boolean;
@@ -14,6 +16,14 @@ let didSetHandler = false;
 async function getNotifications(): Promise<ExpoNotifications | null> {
   if (cachedNotifications !== undefined) {
     return cachedNotifications;
+  }
+
+  // Expo Go on Android cannot load expo-notifications safely from SDK 53 onward.
+  // Keep notification support for development/standalone builds, but make the
+  // Expo Go fallback explicit before the package is evaluated.
+  if (Platform.OS === 'android' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    cachedNotifications = null;
+    return null;
   }
 
   try {
