@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { listTasksByRoutineId } from '@/db/repositories/taskRepository';
+import { calculateMinimumTotalSec } from '@/domain/routineTotals';
 import type { Routine, Task } from '@/types/models';
 
 interface RoutineRow {
@@ -34,7 +35,16 @@ export async function listRoutineCards(db: SQLiteDatabase): Promise<RoutineCardV
       routines.*,
       COUNT(tasks.id) AS task_count,
       COALESCE(SUM(tasks.normal_duration_sec), 0) AS normal_total_sec,
-      COALESCE(SUM(tasks.min_duration_sec), 0) AS minimum_total_sec
+      COALESCE(
+        SUM(
+          CASE
+            WHEN tasks.id IS NULL OR tasks.emergency_behavior = 'OPTIONAL' THEN 0
+            WHEN tasks.min_duration_sec < 0 THEN 0
+            ELSE tasks.min_duration_sec
+          END
+        ),
+        0
+      ) AS minimum_total_sec
     FROM routines
     LEFT JOIN tasks ON tasks.routine_id = routines.id AND tasks.archived_at IS NULL
     WHERE routines.archived_at IS NULL
@@ -66,7 +76,7 @@ export async function getRoutineWithTasks(
 
   const tasks = await listTasksByRoutineId(db, routineId);
   const normalTotalSec = tasks.reduce((sum, task) => sum + task.normalDurationSec, 0);
-  const minimumTotalSec = tasks.reduce((sum, task) => sum + task.minDurationSec, 0);
+  const minimumTotalSec = calculateMinimumTotalSec(tasks);
 
   return {
     ...mapRoutineRow(routine),
@@ -168,3 +178,4 @@ function mapRoutineRow(row: RoutineRow): Routine {
     archivedAt: row.archived_at,
   };
 }
+

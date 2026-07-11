@@ -1,3 +1,4 @@
+import { calculateMinimumTotalSec } from '@/domain/routineTotals';
 import type { EmergencyBehavior, RunMode, Task } from '@/types/models';
 
 export type RunPlanWarning =
@@ -36,12 +37,7 @@ export function createRunPlan(tasks: Task[], mode: RunMode, targetTotalSec?: num
     .map(normalizeTaskDuration);
 
   const normalTotalSec = normalizedTasks.reduce((sum, task) => sum + task.normalDurationSec, 0);
-  const minimumTotalSec = normalizedTasks.reduce((sum, task) => {
-    if (task.emergencyBehavior === 'OPTIONAL') {
-      return sum;
-    }
-    return sum + task.minDurationSec;
-  }, 0);
+  const minimumTotalSec = calculateMinimumTotalSec(normalizedTasks);
 
   if (normalizedTasks.length === 0) {
     return {
@@ -187,3 +183,4 @@ function normalizeTaskDuration(task: Task): Task {
 function sumPlanned(items: RunPlanItem[]) {
   return items.reduce((sum, item) => sum + item.plannedDurationSec, 0);
 }
+
