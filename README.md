@@ -56,9 +56,15 @@ npm.cmd run verify:db-migrations
 
 Goal 3の判断ログは [docs/decisions/goal-3-decisions.md](docs/decisions/goal-3-decisions.md) に残しています。
 
-## 一般公開の準備
+## 現在の配布方針
 
-AndroidのGoogle Play公開に向けた手順は [docs/release/google-play-launch-checklist.md](docs/release/google-play-launch-checklist.md) を参照してください。公開用のプライバシーポリシー案は [docs/legal/privacy-policy-ja.md](docs/legal/privacy-policy-ja.md) にあります。
+Google Playの一般公開は現在保留しています。まずはAndroid実機での完成度、QA、README、実演動画など、学習成果とポートフォリオとしての価値を優先します。
+
+Codexを含む開発エージェントは、作業前に [配布・公開方針の決定ログ](docs/decisions/distribution-and-release-strategy.md) を確認してください。
+
+## 将来のGoogle Play公開準備
+
+将来Google Play公開を再開する場合の手順は [docs/release/google-play-launch-checklist.md](docs/release/google-play-launch-checklist.md) を参照してください。公開用のプライバシーポリシー案は [docs/legal/privacy-policy-ja.md](docs/legal/privacy-policy-ja.md) にあります。
 
 ## 既知の制約
 
