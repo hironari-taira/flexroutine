@@ -4,7 +4,7 @@
 
 ## 現在の実装範囲
 
-Goal 1からGoal 3までのMVPを実装済みです。
+Goal 1からGoal 4までのMVPを実装済みです。
 
 - Expo Router / TypeScript / ESLint構成
 - SQLite DB schemaとmigration v1-v3
@@ -55,6 +55,10 @@ npm.cmd run verify:db-migrations
 - Goal 3: [docs/qa/goal-3-device-checklist.md](docs/qa/goal-3-device-checklist.md)
 
 Goal 3の判断ログは [docs/decisions/goal-3-decisions.md](docs/decisions/goal-3-decisions.md) に残しています。
+
+## 一般公開の準備
+
+AndroidのGoogle Play公開に向けた手順は [docs/release/google-play-launch-checklist.md](docs/release/google-play-launch-checklist.md) を参照してください。公開用のプライバシーポリシー案は [docs/legal/privacy-policy-ja.md](docs/legal/privacy-policy-ja.md) にあります。
 
 ## 既知の制約
 

@@ -1,9 +1,12 @@
 {
   "expo": {
     "name": "FlexRoutine",
+    "description": "予定が崩れても、今日の最低限から整え直せるルーチンタイマーです。",
     "slug": "flexroutine",
     "scheme": "flexroutine",
     "version": "1.0.0",
+    "primaryColor": "#111827",
+    "backgroundColor": "#F6F7F9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,6 +14,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.flexroutine.mobile",
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,6 +44,18 @@
       "expo-sqlite",
       "expo-sharing",
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "headers": {
+          "Cross-Origin-Embedder-Policy": "credentialless",
+          "Cross-Origin-Opener-Policy": "same-origin"
+        }
+      },
+      "eas": {
+        "projectId": "2cc74299-54f4-4abd-a87c-d2e5c9168e5e"
+      }
+    },
+    "owner": "pnbcs-team"
   }
 }

@@ -12,7 +12,7 @@ export default function RootLayout() {
           headerStyle: { backgroundColor: '#f6f7f9' },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'FlexRoutine' }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="routine/new" options={{ title: '新しいルーティン' }} />
         <Stack.Screen name="routine/[id]" options={{ title: 'ルーティン' }} />
         <Stack.Screen name="routine/[id]/run" options={{ title: '実行プレビュー' }} />
