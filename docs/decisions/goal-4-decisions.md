@@ -25,6 +25,14 @@ The old `scripts/verify-run-plan.mjs` contained a second implementation of the p
 
 `verify:run-plan` now runs Playwright tests that import the production `createRunPlan` function. The tests lock normal mode, reverse OPTIONAL skipping, SHRINKABLE-before-MUST_DO reduction, minimum preservation, empty routines, and negative-duration normalization.
 
+## Goal 4-03: Real SQLite migration tests
+
+The old `scripts/verify-db-migrations.mjs` simulated tables and migrations in JavaScript. It could not prove that the SQL in `runMigrations` executed correctly.
+
+`verify:db-migrations` now runs Playwright tests that call the production `runMigrations` function through a small adapter over Node's built-in SQLite engine. The tests cover a fresh database, a v1 database with retained task and task-log rows, and a second migration run for idempotency.
+
+This release check requires Node.js 22.5 or later with `node:sqlite` available. It does not add an npm dependency or change the mobile runtime.
+
 ## Scope control
 
 This change does not:
@@ -33,4 +41,4 @@ This change does not:
 - modify existing routines or execution logs;
 - add notification or session-resume behavior;
 - run `npm audit fix --force`;
-- push changes to GitHub.
+- change the mobile SQLite implementation.

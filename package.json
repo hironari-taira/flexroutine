@@ -31,7 +31,7 @@
     "format": "prettier --write .",
     "verify:run-plan": "playwright test tests/runPlan.spec.ts",
     "verify:routine-totals": "playwright test tests/routineTotals.spec.ts",
-    "verify:db-migrations": "node scripts/verify-db-migrations.mjs",
+    "verify:db-migrations": "playwright test tests/dbMigrations.spec.ts",
     "verify:android-env": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-android-env.ps1",
     "capture:blog": "node scripts/capture-blog-screenshots.mjs"
   },
