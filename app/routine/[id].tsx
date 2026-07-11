@@ -20,7 +20,10 @@ import {
   updateTaskDetails,
   upsertTask,
 } from '@/db/repositories/taskRepository';
-import { cancelRoutineNotification, scheduleRoutineNotification } from '@/services/notificationService';
+import {
+  cancelRoutineNotification,
+  scheduleRoutineNotification,
+} from '@/services/notificationService';
 import type { EmergencyBehavior, RoutineContext, Task } from '@/types/models';
 import { createId } from '@/utils/ids';
 import { formatDuration } from '@/utils/time';
@@ -91,7 +94,13 @@ export default function RoutineDetailScreen() {
     };
     await updateRoutineDetails(db, routine.id, values);
     if (notificationEnabled) {
-      await scheduleRoutineNotification({ ...routine, ...values });
+      const notification = await scheduleRoutineNotification({ ...routine, ...values });
+      if (!notification.ok) {
+        Alert.alert(
+          '通知は端末に設定されていません',
+          `${notification.message}\nルーティンの保存は完了しています。`,
+        );
+      }
     } else {
       await cancelRoutineNotification(routine.id);
     }
@@ -103,22 +112,26 @@ export default function RoutineDetailScreen() {
     if (!routine) {
       return;
     }
-    Alert.alert('ルーティンを削除しますか？', '過去の実行ログは残ります。', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            const db = await getDatabase();
-            await initializeDatabase(db);
-            await archiveRoutine(db, routine.id);
-            await cancelRoutineNotification(routine.id);
-            router.replace('/');
-          })();
+    Alert.alert(
+      'ルーティンをアーカイブしますか？',
+      'アクティブな一覧からは非表示になります。過去の実行ログは残ります。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'アーカイブ',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const db = await getDatabase();
+              await initializeDatabase(db);
+              await archiveRoutine(db, routine.id);
+              await cancelRoutineNotification(routine.id);
+              router.replace('/');
+            })();
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleMove = async (taskId: string, direction: 'UP' | 'DOWN') => {
@@ -137,7 +150,10 @@ export default function RoutineDetailScreen() {
       return;
     }
     const normalDurationSec = Math.max(30, Number.parseInt(newTaskNormalMin || '1', 10) * 60);
-    const minDurationSec = Math.min(normalDurationSec, Math.max(0, Number.parseInt(newTaskMinMin || '0', 10) * 60));
+    const minDurationSec = Math.min(
+      normalDurationSec,
+      Math.max(0, Number.parseInt(newTaskMinMin || '0', 10) * 60),
+    );
     const policies = behaviorToPolicies(newTaskBehavior);
     const nowIso = new Date().toISOString();
     const db = await getDatabase();
@@ -177,7 +193,8 @@ export default function RoutineDetailScreen() {
         <View style={styles.summaryText}>
           <Text style={styles.title}>{routine.title}</Text>
           <Text style={styles.meta}>
-            通常 {formatDuration(routine.normalTotalSec)} / 最低限 {formatDuration(routine.minimumTotalSec)}
+            通常 {formatDuration(routine.normalTotalSec)} / 最低限{' '}
+            {formatDuration(routine.minimumTotalSec)}
           </Text>
         </View>
         <Button
@@ -213,11 +230,20 @@ export default function RoutineDetailScreen() {
               onPress={() => setNotificationEnabled((v) => !v)}
               style={styles.flexButton}
             />
-            <Input value={notificationTime} onChangeText={(value) => setNotificationTime(value.slice(0, 5))} style={styles.timeInput} />
+            <Input
+              value={notificationTime}
+              onChangeText={(value) => setNotificationTime(value.slice(0, 5))}
+              style={styles.timeInput}
+            />
           </View>
           <View style={styles.inlineActions}>
             <Button label="保存" onPress={saveRoutine} style={styles.flexButton} />
-            <Button label="削除" variant="destructive" onPress={confirmArchiveRoutine} style={styles.flexButton} />
+            <Button
+              label="削除"
+              variant="destructive"
+              onPress={confirmArchiveRoutine}
+              style={styles.flexButton}
+            />
           </View>
         </Card>
       ) : null}
@@ -225,13 +251,23 @@ export default function RoutineDetailScreen() {
       <View style={styles.inlineActions}>
         <Button
           label="通常スタート"
-          onPress={() => router.push({ pathname: '/routine/[id]/run', params: { id: routine.id, mode: 'normal' } })}
+          onPress={() =>
+            router.push({
+              pathname: '/routine/[id]/run',
+              params: { id: routine.id, mode: 'normal' },
+            })
+          }
           style={styles.flexButton}
         />
         <Button
           label="緊急・時短"
           variant="destructive"
-          onPress={() => router.push({ pathname: '/routine/[id]/run', params: { id: routine.id, mode: 'emergency' } })}
+          onPress={() =>
+            router.push({
+              pathname: '/routine/[id]/run',
+              params: { id: routine.id, mode: 'emergency' },
+            })
+          }
           style={styles.flexButton}
         />
       </View>
@@ -260,7 +296,9 @@ export default function RoutineDetailScreen() {
               }}
               onMove={handleMove}
               onSaved={load}
-              onToggle={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
+              onToggle={() =>
+                setExpandedTaskId((current) => (current === task.id ? null : task.id))
+              }
             />
           ))}
         </View>
@@ -270,8 +308,16 @@ export default function RoutineDetailScreen() {
         <Text style={styles.sectionTitle}>タスク追加</Text>
         <Input placeholder="新しいタスク名" value={newTaskTitle} onChangeText={setNewTaskTitle} />
         <View style={styles.inlineActions}>
-          <Input value={newTaskNormalMin} onChangeText={(v) => setNewTaskNormalMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
-          <Input value={newTaskMinMin} onChangeText={(v) => setNewTaskMinMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
+          <Input
+            value={newTaskNormalMin}
+            onChangeText={(v) => setNewTaskNormalMin(v.replace(/[^0-9]/g, ''))}
+            style={styles.flexButton}
+          />
+          <Input
+            value={newTaskMinMin}
+            onChangeText={(v) => setNewTaskMinMin(v.replace(/[^0-9]/g, ''))}
+            style={styles.flexButton}
+          />
         </View>
         <BehaviorPicker value={newTaskBehavior} onChange={setNewTaskBehavior} />
         <Button label="追加する" onPress={handleAddTask} />
@@ -302,14 +348,19 @@ function TaskRow({
   task: Task;
 }) {
   const [title, setTitle] = useState(task.title);
-  const [normalMin, setNormalMin] = useState(String(Math.max(1, Math.round(task.normalDurationSec / 60))));
+  const [normalMin, setNormalMin] = useState(
+    String(Math.max(1, Math.round(task.normalDurationSec / 60))),
+  );
   const [minMin, setMinMin] = useState(String(Math.round(task.minDurationSec / 60)));
   const [behavior, setBehavior] = useState<EmergencyBehavior>(task.emergencyBehavior);
   const [emergencyNote, setEmergencyNote] = useState(task.emergencyNote ?? '');
 
   const save = async () => {
     const normalDurationSec = Math.max(30, Number.parseInt(normalMin || '1', 10) * 60);
-    const minDurationSec = Math.min(normalDurationSec, Math.max(0, Number.parseInt(minMin || '0', 10) * 60));
+    const minDurationSec = Math.min(
+      normalDurationSec,
+      Math.max(0, Number.parseInt(minMin || '0', 10) * 60),
+    );
     const db = await getDatabase();
     await initializeDatabase(db);
     await updateTaskDetails(db, task.id, {
@@ -323,6 +374,21 @@ function TaskRow({
     await onSaved();
   };
 
+  const confirmArchive = () => {
+    Alert.alert(
+      'タスクをアーカイブしますか？',
+      `「${task.title}」はこのルーティンの一覧から非表示になります。`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'アーカイブ',
+          style: 'destructive',
+          onPress: () => void onArchive(),
+        },
+      ],
+    );
+  };
+
   return (
     <Card style={styles.taskCard}>
       <Pressable accessibilityRole="button" style={styles.taskCompact} onPress={onToggle}>
@@ -334,23 +400,52 @@ function TaskRow({
           </Text>
         </View>
         <Badge
-          label={task.emergencyBehavior === 'OPTIONAL' ? '余裕' : task.emergencyBehavior === 'SHRINKABLE' ? '短縮' : '必須'}
+          label={
+            task.emergencyBehavior === 'OPTIONAL'
+              ? '余裕'
+              : task.emergencyBehavior === 'SHRINKABLE'
+                ? '短縮'
+                : '必須'
+          }
           tone={task.emergencyBehavior === 'OPTIONAL' ? 'warning' : 'info'}
         />
       </Pressable>
 
       <View style={styles.inlineActions}>
-        <Button label="↑" variant="secondary" disabled={isFirst} onPress={() => void onMove(task.id, 'UP')} />
-        <Button label="↓" variant="secondary" disabled={isLast} onPress={() => void onMove(task.id, 'DOWN')} />
-        <Button label={isExpanded ? '閉じる' : '編集'} variant="ghost" onPress={onToggle} style={styles.flexButton} />
+        <Button
+          label="↑"
+          variant="secondary"
+          disabled={isFirst}
+          onPress={() => void onMove(task.id, 'UP')}
+        />
+        <Button
+          label="↓"
+          variant="secondary"
+          disabled={isLast}
+          onPress={() => void onMove(task.id, 'DOWN')}
+        />
+        <Button
+          label={isExpanded ? '閉じる' : '編集'}
+          variant="ghost"
+          onPress={onToggle}
+          style={styles.flexButton}
+        />
       </View>
 
       {isExpanded ? (
         <View style={styles.expanded}>
           <Input value={title} onChangeText={setTitle} />
           <View style={styles.inlineActions}>
-            <Input value={normalMin} onChangeText={(v) => setNormalMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
-            <Input value={minMin} onChangeText={(v) => setMinMin(v.replace(/[^0-9]/g, ''))} style={styles.flexButton} />
+            <Input
+              value={normalMin}
+              onChangeText={(v) => setNormalMin(v.replace(/[^0-9]/g, ''))}
+              style={styles.flexButton}
+            />
+            <Input
+              value={minMin}
+              onChangeText={(v) => setMinMin(v.replace(/[^0-9]/g, ''))}
+              style={styles.flexButton}
+            />
           </View>
           <BehaviorPicker value={behavior} onChange={setBehavior} />
           <Input
@@ -360,7 +455,12 @@ function TaskRow({
           />
           <View style={styles.inlineActions}>
             <Button label="保存" onPress={save} style={styles.flexButton} />
-            <Button label="削除" variant="destructive" onPress={() => void onArchive()} style={styles.flexButton} />
+            <Button
+              label="アーカイブ"
+              variant="destructive"
+              onPress={confirmArchive}
+              style={styles.flexButton}
+            />
           </View>
         </View>
       ) : null}

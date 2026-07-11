@@ -42,3 +42,9 @@ This change does not:
 - add notification or session-resume behavior;
 - run `npm audit fix --force`;
 - change the mobile SQLite implementation.
+
+## Goal 4-04: Archive confirmation and notification outcome feedback
+
+Routine archive already had a confirmation dialog, but task archive was applied immediately. Both routine and task archive now require an explicit confirmation and use the term "archive" rather than "delete" so the UI matches the soft-delete data model.
+
+Notification settings are saved independently from whether the OS accepts a scheduled notification. When scheduling fails or is unavailable (for example, Android Expo Go), the app now explains that the routine itself was saved while the device notification was not set. This prevents a stored ON toggle from being mistaken for an OS-level notification guarantee.

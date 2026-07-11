@@ -109,9 +109,14 @@ export default function NewRoutineScreen() {
 
     await upsertRoutine(db, routine);
     const taskDefs = template.tasks.map((task, index) =>
-      index === 0 ? ([trimmedTaskTitle, task[1], task[2], task[3], task[4]] satisfies typeof task) : task,
+      index === 0
+        ? ([trimmedTaskTitle, task[1], task[2], task[3], task[4]] satisfies typeof task)
+        : task,
     );
-    for (const [taskIndex, [taskTitle, normalMin, minMin, behavior, emergencyNote]] of taskDefs.entries()) {
+    for (const [
+      taskIndex,
+      [taskTitle, normalMin, minMin, behavior, emergencyNote],
+    ] of taskDefs.entries()) {
       const canSkip = behavior === 'OPTIONAL';
       await upsertTask(db, {
         id: createId('task'),
@@ -133,7 +138,13 @@ export default function NewRoutineScreen() {
     }
 
     if (notificationEnabled) {
-      await scheduleRoutineNotification(routine);
+      const notification = await scheduleRoutineNotification(routine);
+      if (!notification.ok) {
+        Alert.alert(
+          '通知は端末に設定されていません',
+          `${notification.message}\nルーティンの作成は完了しています。`,
+        );
+      }
     }
 
     router.replace({ pathname: '/routine/[id]', params: { id: routineId } });
