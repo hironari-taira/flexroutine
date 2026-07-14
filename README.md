@@ -77,7 +77,7 @@ npm.cmd run android
 - Expo GoのAndroidでは、SDK 53以降 `expo-notifications` の実通知が制限されるため、UIと安全なfallbackを確認している。実通知はdevelopment buildで検証する。
 - 長時間バックグラウンド復帰、OS kill後の途中再開、通知からの途中復帰は今後の改善対象。
 - Web版は、ネイティブ機能との互換性と保守コストを確認できた場合のみ検討する。
-
+- Google Playの一般公開、正式アプリ名、Android package nameは、公開方針を再検討するまで変更しない。
 
 ## 資料
 

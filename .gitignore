@@ -43,3 +43,6 @@ tmp/
 # generated native folders
 /ios
 /android
+
+# Personal planning notes. Never commit this directory to the public repository.
+/private/
