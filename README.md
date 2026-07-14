@@ -12,7 +12,7 @@ Google Playの一般公開は現在保留し、Android実機で動く成果物�
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | ![ルーチンを始めるホーム画面](docs/blog-assets/device-goal3-home-add-routine.png) | ![時短後のプランを確認する画面](docs/blog-assets/device-goal3-run-preview.png) | ![完了した実行を振り返る履歴画面](docs/blog-assets/device-goal3-history-list.png) |
 
-さらに、タイマー画面のAndroid safe area対応は[こちらの実機スクリーンショット](docs/blog-assets/device-goal3-timer-safe-area.png)で確認できます。60秒で説明するための操作順は[Androidデモ資料](docs/portfolio/android-demo.md)にまとめています。
+さらに、タイマー画面のAndroid safe area対応は[こちらの実機スクリーンショット](docs/blog-assets/device-goal3-timer-safe-area.png)で確認できます。
 
 ## 体験のポイント
 
@@ -44,9 +44,7 @@ Goal 1からGoal 4までのMVPを実装済みです。
 
 ## 実機QAと検証
 
-Android 15の実機で、ルーチン作成、時短プラン、タイマー、完了保存、共有、履歴、メモ編集までを確認しています。検証項目とスクリーンショット証跡は[Goal 3 Device Checklist](docs/qa/goal-3-device-checklist.md)を参照してください。
-
-2026-07-12時点のポートフォリオ回帰記録は[こちら](docs/qa/portfolio-regression-2026-07-12.md)です。ロック解除後に再実行する実機スモークテストも明示しています。
+Android実機で、ルーチン作成、時短プラン、タイマー、完了保存、共有、履歴、メモ編集までを確認しています。実行結果と既知の制約は[検証サマリー](docs/qa/portfolio-regression-2026-07-12.md)にまとめています。
 
 ローカルで実行できる静的検証:
 
@@ -77,13 +75,10 @@ npm.cmd run android
 - Expo GoのAndroidでは、SDK 53以降 `expo-notifications` の実通知が制限されるため、UIと安全なfallbackを確認している。実通知はdevelopment buildで検証する。
 - 長時間バックグラウンド復帰、OS kill後の途中再開、通知からの途中復帰は今後の改善対象。
 - Web版は、ネイティブ機能との互換性と保守コストを確認できた場合のみ検討する。
-- Google Playの一般公開、正式アプリ名、Android package nameは、公開方針を再検討するまで変更しない。
+- Google Playの一般公開は、公開方針を再検討するまで行わない。
 
 ## 資料
 
 - [配布・公開方針の決定ログ](docs/decisions/distribution-and-release-strategy.md)
-- [Androidデモ資料](docs/portfolio/android-demo.md)
-- [ポートフォリオ回帰QA](docs/qa/portfolio-regression-2026-07-12.md)
-- [Goal 1 QA](docs/qa/goal-1-android-checklist.md) / [Goal 2 QA](docs/qa/goal-2-device-checklist.md) / [Goal 3 QA](docs/qa/goal-3-device-checklist.md)
+- [検証サマリー](docs/qa/portfolio-regression-2026-07-12.md)
 - [Goal 3 設計判断](docs/decisions/goal-3-decisions.md)
-- [将来のGoogle Play公開チェックリスト](docs/release/google-play-launch-checklist.md)

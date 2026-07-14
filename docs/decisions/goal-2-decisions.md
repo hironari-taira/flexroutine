@@ -69,7 +69,7 @@ Goal 2では外部画像を使わず、コード上の背景プリセットだ�
 - SNS別の投稿最適化
 ## Physical Android verification update - 2026-06-28
 
-Connected physical Android device `[redacted-device-id]` (`[redacted-device-model]`, Android 15 / API 35) was used for the final runtime checks in Expo Go.
+An Android 15 physical device was used for the final runtime checks in Expo Go.
 
 Confirmed on the device:
 
